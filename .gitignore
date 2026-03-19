@@ -31,6 +31,7 @@ Thumbs.db
 # Local development
 .env
 .env.local
+PROMPTS.md
 
 # Node (if any JS tooling)
 node_modules/
