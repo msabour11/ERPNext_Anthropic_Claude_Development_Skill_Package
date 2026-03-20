@@ -1,94 +1,109 @@
-# ERPNext Skills Package - Index
+# Frappe Claude Skill Package — Index
 
-> Complete collection of 28 deterministic skills for generating flawless ERPNext/Frappe code.
+> 53 deterministic skills for Frappe Framework v14-v16 development and operations.
 
----
+## Quick Stats
 
-## Package Overview
+| Category | Count | Purpose |
+|----------|:-----:|---------|
+| syntax/ | 11 | Code syntax reference |
+| core/ | 7 | Cross-cutting concerns |
+| impl/ | 13 | Implementation workflows |
+| errors/ | 7 | Error handling |
+| ops/ | 8 | Operations & deployment |
+| agents/ | 5 | Intelligent agents |
+| testing/ | 2 | Quality & CI/CD |
+| **Total** | **53** | |
 
-| Category | Skills | Description |
-|----------|:------:|-------------|
-| [Syntax](#syntax-skills) | 8 | Language patterns and API syntax |
-| [Core](#core-skills) | 3 | Database, Permissions, API fundamentals |
-| [Implementation](#implementation-skills) | 8 | Step-by-step development workflows |
-| [Error Handling](#error-handling-skills) | 7 | Robust error handling patterns |
-| [Agents](#agent-skills) | 2 | Intelligent code interpretation & validation |
-| **Total** | **28** | |
+## Skills by Category
 
-**Compatibility**: Frappe/ERPNext v14, v15, v16
+### syntax/ — Code Syntax Reference
 
----
+| Skill | Description |
+|-------|-------------|
+| [frappe-syntax-clientscripts](skills/source/syntax/frappe-syntax-clientscripts/) | Use when writing client-side JavaScript for ERPNext/Frappe form events, field manipulation, server calls, or child table handling in v14/v15/v16. |
+| [frappe-syntax-controllers](skills/source/syntax/frappe-syntax-controllers/) | Use when writing Python Document Controllers for ERPNext/Frappe DocTypes. |
+| [frappe-syntax-customapp](skills/source/syntax/frappe-syntax-customapp/) | Use when building Frappe custom apps from scratch. |
+| [frappe-syntax-doctypes](skills/source/syntax/frappe-syntax-doctypes/) | Use when creating or modifying DocType JSON definitions, choosing fieldtypes, configuring naming rules, adding child tables, or setting up tree structures. |
+| [frappe-syntax-hooks](skills/source/syntax/frappe-syntax-hooks/) | Use when configuring Frappe hooks.py for app events, scheduler tasks, document events, fixtures, boot session, jenv customization, or website routing. |
+| [frappe-syntax-hooks-events](skills/source/syntax/frappe-syntax-hooks-events/) | Use when implementing document lifecycle hooks via doc_events in hooks.py, understanding event execution order, or extending/overriding document behavior from another app. |
+| [frappe-syntax-jinja](skills/source/syntax/frappe-syntax-jinja/) | Use when writing Jinja templates for ERPNext/Frappe Print Formats, Email Templates, and Portal Pages. |
+| [frappe-syntax-reports](skills/source/syntax/frappe-syntax-reports/) | Use when building Query Reports, Script Reports, or configuring Report Builder, including chart data integration. |
+| [frappe-syntax-scheduler](skills/source/syntax/frappe-syntax-scheduler/) | Use when configuring scheduler events and background jobs in Frappe/ERPNext v14/v15/v16. |
+| [frappe-syntax-serverscripts](skills/source/syntax/frappe-syntax-serverscripts/) | Use when writing Python code for ERPNext/Frappe Server Scripts including Document Events, API endpoints, Scheduler Events, and Permission Queries. |
+| [frappe-syntax-whitelisted](skills/source/syntax/frappe-syntax-whitelisted/) | Use when creating Frappe Whitelisted Methods (Python API endpoints) for v14/v15/v16. |
 
-## Syntax Skills
+### core/ — Cross-Cutting Concerns
 
-Foundation skills that define HOW to write code.
+| Skill | Description |
+|-------|-------------|
+| [frappe-core-api](skills/source/core/frappe-core-api/) | Use when building ERPNext/Frappe API integrations (v14/v15/v16) including REST API, RPC API, authentication, webhooks, and rate limiting. |
+| [frappe-core-cache](skills/source/core/frappe-core-cache/) | Use when implementing Redis caching, cache invalidation, or distributed locking in Frappe. |
+| [frappe-core-database](skills/source/core/frappe-core-database/) | Use when performing database operations in ERPNext/Frappe v14-v16. |
+| [frappe-core-files](skills/source/core/frappe-core-files/) | Use when handling file uploads, attachments, private/public file access, or S3 storage configuration. |
+| [frappe-core-notifications](skills/source/core/frappe-core-notifications/) | Use when implementing email notifications, system alerts, Assignment Rules, Auto Repeat, or ToDo items. |
+| [frappe-core-permissions](skills/source/core/frappe-core-permissions/) | Use when implementing the Frappe/ERPNext permission system. |
+| [frappe-core-workflow](skills/source/core/frappe-core-workflow/) | Use when creating or modifying Frappe Workflows, defining states and transitions, adding action conditions, or troubleshooting workflow permission errors. |
 
-| Skill | Description | Key Topics |
-|-------|-------------|------------|
-| `frappe-syntax-clientscripts` | Client-side JavaScript patterns | frappe.ui.form, triggers, field manipulation |
-| `frappe-syntax-serverscripts` | Server Script sandbox patterns | Restricted Python, frappe namespace, doc events |
-| `frappe-syntax-controllers` | Document Controller patterns | Lifecycle hooks, autoname, UUID (v16), flags |
-| `frappe-syntax-hooks` | hooks.py configuration | doc_events, override_doctype_class, scheduler |
-| `frappe-syntax-whitelisted` | @frappe.whitelist() methods | API endpoints, permissions, async patterns |
-| `frappe-syntax-jinja` | Jinja templating patterns | Print formats, web templates, filters |
-| `frappe-syntax-scheduler` | Scheduled jobs patterns | Cron syntax, background jobs, tick intervals |
-| `frappe-syntax-customapp` | Custom app structure | Module creation, fixtures, patches |
+### impl/ — Implementation Workflows
 
----
+| Skill | Description |
+|-------|-------------|
+| [frappe-impl-clientscripts](skills/source/impl/frappe-impl-clientscripts/) | Use when implementing client-side form features in Frappe/ERPNext: field visibility, cascading filters, calculated fields, custom buttons, server calls, form validation, child table logic, debugging. |
+| [frappe-impl-controllers](skills/source/impl/frappe-impl-controllers/) | Use when building Document Controllers in a custom Frappe app: file creation, lifecycle hooks, validation, autoname, submittable workflows, controller override. |
+| [frappe-impl-customapp](skills/source/impl/frappe-impl-customapp/) | Use when building a custom Frappe app from scratch. |
+| [frappe-impl-hooks](skills/source/impl/frappe-impl-hooks/) | Use when implementing hooks.py configurations in a Frappe custom app. |
+| [frappe-impl-integrations](skills/source/impl/frappe-impl-integrations/) | Use when implementing OAuth providers, Connected Apps, Webhooks, Payment Gateways, or Data Import/Export in Frappe. |
+| [frappe-impl-jinja](skills/source/impl/frappe-impl-jinja/) | Use when building Jinja templates in Frappe: Print Formats, Email Templates, Notification templates, Portal Pages, and custom Jinja methods. |
+| [frappe-impl-reports](skills/source/impl/frappe-impl-reports/) | Use when building Script Reports, Query Reports, dashboard charts, or Number Cards in ERPNext. |
+| [frappe-impl-scheduler](skills/source/impl/frappe-impl-scheduler/) | Use when implementing scheduled tasks and background jobs in Frappe v14/v15/v16. |
+| [frappe-impl-serverscripts](skills/source/impl/frappe-impl-serverscripts/) | Use when implementing server-side features via Setup > Server Script: document validation, auto-fill, API endpoints, scheduled tasks, permission queries. |
+| [frappe-impl-ui-components](skills/source/impl/frappe-impl-ui-components/) | Use when building custom dialogs, extending List View, creating Page controllers, or adding Kanban/Calendar views and realtime updates. |
+| [frappe-impl-website](skills/source/impl/frappe-impl-website/) | Use when building portal pages, Web Forms, website routes, or configuring themes and SEO in Frappe. |
+| [frappe-impl-whitelisted](skills/source/impl/frappe-impl-whitelisted/) | Use when building API endpoints with @frappe.whitelist() in Frappe. |
+| [frappe-impl-workflow](skills/source/impl/frappe-impl-workflow/) | Use when implementing document Workflows, approval chains, or state-based transitions in Frappe. |
 
-## Core Skills
+### errors/ — Error Handling
 
-Cross-cutting concerns that apply to all development.
+| Skill | Description |
+|-------|-------------|
+| [frappe-errors-api](skills/source/errors/frappe-errors-api/) | Use when debugging or handling API errors in Frappe/ERPNext v14/v15/v16. |
+| [frappe-errors-clientscripts](skills/source/errors/frappe-errors-clientscripts/) | Use when debugging or preventing errors in Frappe Client Scripts. |
+| [frappe-errors-controllers](skills/source/errors/frappe-errors-controllers/) | Use when debugging or preventing errors in Frappe Document Controllers. |
+| [frappe-errors-database](skills/source/errors/frappe-errors-database/) | Use when handling database errors in Frappe/ERPNext. |
+| [frappe-errors-hooks](skills/source/errors/frappe-errors-hooks/) | Use when debugging hooks.py errors in Frappe/ERPNext. |
+| [frappe-errors-permissions](skills/source/errors/frappe-errors-permissions/) | Use when debugging or handling permission errors in Frappe/ERPNext. |
+| [frappe-errors-serverscripts](skills/source/errors/frappe-errors-serverscripts/) | Use when debugging or preventing errors in Frappe Server Scripts. |
 
-| Skill | Description | Key Topics |
-|-------|-------------|------------|
-| `frappe-core-database` | Database operations | frappe.db API, transactions, SQL patterns |
-| `frappe-core-permissions` | Permission system | Roles, user permissions, data masking (v16) |
-| `frappe-core-api` | API design patterns | REST, RPC, webhooks, authentication |
+### ops/ — Operations & Deployment
 
----
+| Skill | Description |
+|-------|-------------|
+| [frappe-ops-app-lifecycle](skills/source/ops/frappe-ops-app-lifecycle/) | Use when scaffolding a new Frappe app, configuring app settings, building assets, running tests, deploying, updating, or publishing to marketplace. |
+| [frappe-ops-backup](skills/source/ops/frappe-ops-backup/) | Use when configuring backups, restoring sites, encrypting backup files, scheduling automated backups, or planning disaster recovery. |
+| [frappe-ops-bench](skills/source/ops/frappe-ops-bench/) | Use when running bench commands, managing sites, configuring multi-tenancy, or setting up domains. |
+| [frappe-ops-cloud](skills/source/ops/frappe-ops-cloud/) | Use when working with Frappe Cloud, Press API, provisioning sites, or managing benches on Frappe Cloud infrastructure. |
+| [frappe-ops-deployment](skills/source/ops/frappe-ops-deployment/) | Use when deploying Frappe/ERPNext to production, configuring Nginx or Supervisor, setting up Docker, enabling SSL, or hardening security. |
+| [frappe-ops-frontend-build](skills/source/ops/frappe-ops-frontend-build/) | Use when configuring frontend asset bundling, migrating from build.json (v14) to esbuild (v15+), or troubleshooting SCSS/CSS compilation. |
+| [frappe-ops-performance](skills/source/ops/frappe-ops-performance/) | Use when tuning MariaDB, configuring Redis memory, sizing Gunicorn workers, setting up CDN, or profiling slow queries. |
+| [frappe-ops-upgrades](skills/source/ops/frappe-ops-upgrades/) | Use when upgrading Frappe/ERPNext between major versions (v14 to v15, v15 to v16), troubleshooting failed migrations, or planning rollback. |
 
-## Implementation Skills
+### agents/ — Intelligent Agents
 
-Step-by-step workflows for common development tasks.
+| Skill | Description |
+|-------|-------------|
+| [frappe-agent-architect](skills/source/agents/frappe-agent-architect/) | Use when designing multi-app Frappe architectures, deciding whether to split functionality into separate apps, or implementing cross-app communication patterns. |
+| [frappe-agent-debugger](skills/source/agents/frappe-agent-debugger/) | Use when debugging Frappe errors, using bench console for live inspection, analyzing tracebacks, or reading Frappe log files. |
+| [frappe-agent-interpreter](skills/source/agents/frappe-agent-interpreter/) | Use when receiving vague or unclear ERPNext/Frappe development requests that need interpretation. |
+| [frappe-agent-migrator](skills/source/agents/frappe-agent-migrator/) | Use when migrating a Frappe app between major versions, detecting breaking API changes, or resolving post-migration errors. |
+| [frappe-agent-validator](skills/source/agents/frappe-agent-validator/) | Use when reviewing or validating Frappe/ERPNext code against best practices and common pitfalls. |
 
-| Skill | Description | When to Use |
-|-------|-------------|-------------|
-| `frappe-impl-clientscripts` | Client Script workflows | Form customization, UX enhancement |
-| `frappe-impl-serverscripts` | Server Script workflows | Quick server-side logic without custom app |
-| `frappe-impl-controllers` | Controller workflows | Full DocType customization |
-| `frappe-impl-hooks` | hooks.py workflows | Extending existing DocTypes |
-| `frappe-impl-whitelisted` | API endpoint workflows | Building custom API endpoints |
-| `frappe-impl-jinja` | Template workflows | Print formats, emails, reports |
-| `frappe-impl-scheduler` | Scheduled job workflows | Background processing, automation |
-| `frappe-impl-customapp` | Custom app workflows | Building complete Frappe apps |
+### testing/ — Quality & CI/CD
 
----
-
-## Error Handling Skills
-
-Robust error handling patterns for production code.
-
-| Skill | Description | Covers |
-|-------|-------------|--------|
-| `frappe-errors-clientscripts` | Client-side error handling | JavaScript errors, API call failures |
-| `frappe-errors-serverscripts` | Server Script error handling | Sandbox limitations, exception handling |
-| `frappe-errors-controllers` | Controller error handling | Validation, transaction failures |
-| `frappe-errors-hooks` | hooks.py error handling | Hook failures, event handling |
-| `frappe-errors-database` | Database error handling | Deadlocks, constraints, transactions |
-| `frappe-errors-permissions` | Permission error handling | Access denied, graceful degradation |
-| `frappe-errors-api` | API error handling | HTTP errors, response formatting |
-
----
-
-## Agent Skills
-
-Intelligent skills that orchestrate other skills.
-
-| Skill | Description | Use Case |
-|-------|-------------|----------|
-| `frappe-agent-interpreter` | Requirements → Technical specs | Vague requests like "make invoice auto-calculate" |
-| `frappe-agent-validator` | Code validation against all skills | Verify code before deployment |
+| Skill | Description |
+|-------|-------------|
+| [frappe-testing-cicd](skills/source/testing/frappe-testing-cicd/) | Use when setting up CI/CD pipelines for Frappe apps, configuring GitHub Actions test workflows, or adding linting and security scanning. |
+| [frappe-testing-unit](skills/source/testing/frappe-testing-unit/) | Use when writing unit tests, integration tests, creating test fixtures, or running tests with bench run-tests. |
 
 ---
 
@@ -104,47 +119,57 @@ What do you need to build?
 │   └─► syntax-serverscripts + impl-serverscripts + errors-serverscripts
 │
 ├─► Full DocType customization
-│   └─► syntax-controllers + impl-controllers + errors-controllers
-│       + database + permissions
+│   └─► syntax-controllers + syntax-doctypes + impl-controllers + errors-controllers
+│       + core-database + core-permissions
 │
 ├─► Extend existing ERPNext DocType
-│   └─► syntax-hooks + impl-hooks + errors-hooks
+│   └─► syntax-hooks + syntax-hooks-events + impl-hooks + errors-hooks
 │
 ├─► Build API endpoints
-│   └─► syntax-whitelisted + impl-whitelisted + api-patterns + errors-api
+│   └─► syntax-whitelisted + impl-whitelisted + core-api + errors-api
 │
 ├─► Print formats / Templates
 │   └─► syntax-jinja + impl-jinja
+│
+├─► Reports & Dashboards
+│   └─► syntax-reports + impl-reports
 │
 ├─► Scheduled automation
 │   └─► syntax-scheduler + impl-scheduler + syntax-hooks
 │
 ├─► Complete custom app
-│   └─► syntax-customapp + impl-customapp + (all relevant skills)
+│   └─► syntax-customapp + impl-customapp + ops-app-lifecycle
+│
+├─► Workflows & Approvals
+│   └─► core-workflow + impl-workflow
+│
+├─► External integrations
+│   └─► impl-integrations + core-api + errors-api
+│
+├─► UI components (dialogs, lists, realtime)
+│   └─► impl-ui-components + impl-clientscripts
+│
+├─► Website / Portal
+│   └─► impl-website + syntax-jinja + impl-jinja
+│
+├─► Deploy to production
+│   └─► ops-deployment + ops-bench + ops-performance + ops-backup
+│
+├─► CI/CD & Testing
+│   └─► testing-unit + testing-cicd
+│
+├─► Version upgrade (v14→v15→v16)
+│   └─► ops-upgrades + agent-migrator
+│
+├─► Multi-app architecture
+│   └─► agent-architect + ops-app-lifecycle
+│
+├─► Debug an error
+│   └─► agent-debugger + relevant errors/* skill
 │
 └─► Don't know where to start?
-    └─► code-interpreter (will recommend skills)
+    └─► agent-interpreter (will analyze your request and recommend skills)
 ```
-
----
-
-## Version-Specific Features
-
-### v14 Only
-- Basic Server Scripts
-- Standard permissions
-
-### v15+
-- Type annotations
-- `before_discard` / `on_discard` hooks
-- `Desk User` role
-
-### v16+
-- **UUID autoname** - Globally unique document IDs
-- **Data Masking** - Field-level data protection
-- Chrome PDF rendering
-- 60-second scheduler tick (was 4 minutes)
-- `extend_doctype_class` hook
 
 ---
 
@@ -152,17 +177,12 @@ What do you need to build?
 
 | Document | Description |
 |----------|-------------|
-| [DEPENDENCIES.md](docs/DEPENDENCIES.md) | Skill dependency matrix |
-| [INSTALL.md](INSTALL.md) | Installation instructions |
+| [README.md](README.md) | Project overview and installation |
 | [ROADMAP.md](ROADMAP.md) | Project status and history |
 | [LESSONS.md](LESSONS.md) | Technical discoveries |
+| [WAY_OF_WORK.md](WAY_OF_WORK.md) | 7-phase methodology |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
 
 ---
 
-## Contributing
-
-This package is maintained by OpenAEC Foundation. For issues or contributions, see the GitHub repository.
-
----
-
-*ERPNext Skills Package v1.0 | Last updated: 2026-01-18*
+*Frappe Claude Skill Package v2.0 | 53 skills | Last updated: 2026-03-20*

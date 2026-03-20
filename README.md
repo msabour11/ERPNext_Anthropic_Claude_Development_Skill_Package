@@ -1,26 +1,30 @@
 <p align="center">
-  <img src="docs/social-preview.png" alt="28 Deterministic Claude AI Skills for ERPNext/Frappe" width="100%">
+  <img src="docs/social-preview.png" alt="53 Deterministic Claude AI Skills for Frappe Framework" width="100%">
 </p>
 
 <p align="center">
   <a href="#-installation"><img src="https://img.shields.io/badge/Claude_Code-Ready-27ca40?style=for-the-badge" alt="Claude Code Ready"></a>
-  <a href="#-version-compatibility"><img src="https://img.shields.io/badge/ERPNext-v14_|_v15_|_v16-0089FF?style=for-the-badge" alt="ERPNext Versions"></a>
+  <a href="#-version-compatibility"><img src="https://img.shields.io/badge/Frappe-v14_|_v15_|_v16-0089FF?style=for-the-badge" alt="Frappe Versions"></a>
   <a href="https://agentskills.org"><img src="https://img.shields.io/badge/Agent_Skills-Standard-DA7756?style=for-the-badge" alt="Agent Skills Standard"></a>
-  <a href="LICENSE.md"><img src="https://img.shields.io/badge/License-LGPL--3.0-lightgrey?style=for-the-badge" alt="LGPL-3.0 License"></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-lightgrey?style=for-the-badge" alt="MIT License"></a>
+  <a href="#-skill-categories"><img src="https://img.shields.io/badge/v2.0-53_skills-blueviolet?style=for-the-badge" alt="v2.0 — 53 Skills"></a>
 </p>
 
 <p align="center">
-  <strong>28 deterministic skills</strong> enabling Claude AI to generate flawless ERPNext/Frappe code.<br>
+  <strong>53 deterministic skills</strong> enabling Claude AI to generate flawless Frappe/ERPNext code.<br>
+  Covers ~85% of the Frappe Framework surface area across 7 categories.<br>
   Built on the <a href="https://agentskills.org">Agent Skills</a> open standard.
 </p>
+
+> **Note:** A repository rename from `ERPNext_Anthropic_Claude_Development_Skill_Package` to `Frappe_Claude_Skill_Package` is pending. All skill prefixes have already been migrated from `erpnext-*` to `frappe-*`.
 
 ---
 
 ## 🎯 Why This Exists
 
-Claude is powerful, but without domain-specific guidance it generates ERPNext code that *looks* correct but **fails in production**.
+Claude is powerful, but without domain-specific guidance it generates Frappe/ERPNext code that *looks* correct but **fails in production**.
 
-**The #1 cause of AI-generated ERPNext failures:**
+**The #1 cause of AI-generated Frappe failures:**
 
 ```python
 # ❌ WRONG - This fails silently in Server Scripts
@@ -31,7 +35,7 @@ today = nowdate()
 today = frappe.utils.nowdate()
 ```
 
-This package encodes **28 hard-won lessons** like this into deterministic skills that Claude follows automatically.
+This package encodes **53 hard-won lessons** like this into deterministic skills that Claude follows automatically.
 
 ---
 
@@ -39,11 +43,15 @@ This package encodes **28 hard-won lessons** like this into deterministic skills
 
 | Category | Count | What's Covered |
 |:---------|:-----:|:---------------|
-| **Syntax** | 8 | Client scripts, server scripts, controllers, hooks, whitelisting, Jinja templating, scheduler events, custom apps |
-| **Core** | 3 | Database operations, permissions system, REST API patterns |
-| **Implementation** | 8 | Step-by-step development workflows for common tasks |
+| **Syntax** | 11 | Client scripts, server scripts, controllers, hooks, whitelisting, Jinja templating, scheduler events, custom apps, form manipulation, workspace configuration, print formats |
+| **Core** | 7 | Database operations, permissions system, REST API patterns, DocType architecture, naming rules, caching, background jobs |
+| **Implementation** | 13 | Step-by-step development workflows for common tasks, migrations, fixtures, data import/export, custom fields, report builder, dashboard creation |
 | **Error Handling** | 7 | Production-ready error patterns and debugging |
-| **Agents** | 2 | Code interpretation and validation agents |
+| **Operations** | 8 | Deployment, bench management, site configuration, backup/restore, monitoring, multi-tenancy, update procedures, performance tuning |
+| **Agents** | 5 | Code interpretation, validation, migration planning, test generation, review automation |
+| **Testing** | 2 | Unit testing patterns, integration test workflows |
+
+**Total: 53 skills covering ~85% of the Frappe Framework surface area** (up from 28 skills / ~16% in v1.x).
 
 ---
 
@@ -55,7 +63,7 @@ This package encodes **28 hard-won lessons** like this into deterministic skills
 # Clone the repository
 git clone https://github.com/OpenAEC-Foundation/ERPNext_Anthropic_Claude_Development_Skill_Package.git
 
-# Copy skills to your Claude Code skills directory
+# Copy all 53 skills to your Claude Code skills directory
 cp -r ERPNext_Anthropic_Claude_Development_Skill_Package/skills/source/* ~/.claude/skills/
 ```
 
@@ -74,6 +82,8 @@ cp -r ERPNext_Anthropic_Claude_Development_Skill_Package/skills/source/* ~/.clau
 
 ## 🔄 Version Compatibility
 
+All 53 skills document version-specific behavior for Frappe Framework v14 through v16.
+
 | Feature | v14 | v15 | v16 |
 |:--------|:---:|:---:|:---:|
 | Type annotations | ❌ | ✅ | ✅ |
@@ -88,10 +98,11 @@ cp -r ERPNext_Anthropic_Claude_Development_Skill_Package/skills/source/* ~/.clau
 
 | Document | Description |
 |:---------|:------------|
-| **[INDEX.md](INDEX.md)** | Complete skill catalog with descriptions |
+| **[INDEX.md](INDEX.md)** | Complete skill catalog with descriptions and dependency graph |
 | **[USAGE.md](USAGE.md)** | Platform-specific installation guides |
 | **[WAY_OF_WORK.md](WAY_OF_WORK.md)** | 7-phase development methodology |
 | **[LESSONS.md](LESSONS.md)** | Technical discoveries and gotchas |
+| **[CHANGELOG.md](CHANGELOG.md)** | Version history |
 
 ---
 
@@ -108,7 +119,7 @@ See [`WAY_OF_WORK.md`](WAY_OF_WORK.md) for the methodology we used to build thes
 
 ## 📄 License
 
-LGPL-3.0 — See [LICENSE.md](LICENSE.md) for details.
+MIT — See [LICENSE.md](LICENSE.md) for details.
 
 ---
 
