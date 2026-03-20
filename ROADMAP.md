@@ -4,10 +4,10 @@
 > Claude Project Instructies verwijzen hiernaar - geen dubbele tracking.
 
 > **Laatste update**: 2026-03-20
-> **Status**: V2.0 UPGRADE GEPLAND
+> **Status**: V2.0 COMPLEET — V3.0 GEPLAND
+> **V3 Gap Analysis**: [frappe-skill-package-gap-analysis-v3.md](docs/masterplan/frappe-skill-package-gap-analysis-v3.md)
 > **V2 Tech Spec**: [frappe-skill-package-tech-spec-v2.md](docs/masterplan/frappe-skill-package-tech-spec-v2.md)
 > **V2 Gap Analysis**: [frappe-skill-package-gap-analysis.md](docs/masterplan/frappe-skill-package-gap-analysis.md)
-> **V1 Masterplan**: [erpnext-skills-masterplan-v4.md](docs/masterplan/erpnext-skills-masterplan-v4.md)
 > **Structuur**: Engels-only, Anthropic-conform, V14/V15/V16 compatible
 
 ---
@@ -53,6 +53,66 @@
 | **P1** | notifications, ui-components, website, files, hooks-events | ✅ |
 | **P2** | bench, deployment, backup, performance, upgrades, frontend-build | ✅ |
 | **P3** | cloud, cache, integrations, architect, debugger, migrator | ✅ |
+
+---
+
+## V3.0 Upgrade — Full Coverage (~95%)
+
+> **Doel**: Van 53 naar 60 skills + 12 bestaande skills verrijken
+> **Scope**: 7 nieuwe skills + 12 uitbreidingen (extra reference files)
+> **Dekking**: ~85% -> ~95% van het Frappe surface area
+> **Gap Analysis**: [frappe-skill-package-gap-analysis-v3.md](docs/masterplan/frappe-skill-package-gap-analysis-v3.md)
+
+### V3 Status
+
+| Categorie | Voltooid | Totaal |
+|-----------|:--------:|:------:|
+| Nieuwe skills (P0: translation, utils) | 0 | 2 |
+| Nieuwe skills (P1: print, query-builder, workspace) | 0 | 3 |
+| Nieuwe skills (P2: logging, search) | 0 | 2 |
+| Uitbreidingen bestaande skills | 0 | 12 |
+| **TOTAAL v3.0** | **0** | **19** |
+
+**V3 Progress**: ░░░░░░░░░░░░░░░░░░░░ **0%** — Gepland
+
+### V3 Fasen
+
+| Fase | Beschrijving | Status |
+|------|-------------|:------:|
+| V3.1 | Research voor 7 nieuwe skills | ⏳ Gepland |
+| V3.2 | Nieuwe skills creeren (P0 -> P1 -> P2) | ⏳ Gepland |
+| V3.3 | 12 bestaande skills uitbreiden | ⏳ Gepland |
+| V3.4 | Validatie + INDEX + README | ⏳ Gepland |
+| V3.5 | Release v3.0.0 | ⏳ Gepland |
+
+### V3 Nieuwe Skills
+
+| Prioriteit | Skill | Scope |
+|:----------:|-------|-------|
+| **P0** | `frappe-core-translation` | i18n, _(), CSV files, bench get-untranslated, RTL |
+| **P0** | `frappe-core-utils` | 40+ frappe.utils.* functies referentie |
+| **P1** | `frappe-syntax-print` | Print Formats, Print Designer [v15+], Letter Head, get_pdf() |
+| **P1** | `frappe-syntax-query-builder` | frappe.qb dedicated referentie, joins, cross-DB |
+| **P1** | `frappe-impl-workspace` | Workspace DocType, shortcuts, charts, number cards |
+| **P2** | `frappe-core-logging` | frappe.logger(), structured logging, production patterns |
+| **P2** | `frappe-core-search` | FullTextSearch API, global_search, Awesomebar |
+
+### V3 Uitbreidingen Bestaande Skills
+
+| Skill | Uitbreiding |
+|-------|------------|
+| frappe-impl-ui-components | Controls API, Tree View API, dropdown_button |
+| frappe-impl-website | Portal Generators, Blog systeem |
+| frappe-impl-jinja | Print Designer decision tree |
+| frappe-core-notifications | Email Account setup, Email Queue, bulk email |
+| frappe-ops-app-lifecycle | Module Def, Workspace JSON shipping |
+| frappe-syntax-controllers | Document API complete reference |
+| frappe-ops-bench | Custom bench commands hook |
+| frappe-syntax-hooks | Request lifecycle, Router API |
+| frappe-agent-debugger | VS Code DAP, bench console advanced |
+| frappe-ops-upgrades | Frappe Packages |
+| frappe-syntax-doctypes | Data Masking [v16+], frappe.types |
+| frappe-core-database | Cross-ref naar query-builder skill |
 
 ---
 
@@ -158,6 +218,17 @@ Alle 28 skills en agents voltooid en gedocumenteerd.
 ---
 
 ## Release History
+
+### v2.0.0 (2026-03-20) - Frappe Framework Full Coverage ✅
+
+- 53 skills (was 28) across 7 categories
+- Renamed erpnext-* -> frappe-* (all 28 existing skills)
+- 25 new skills: ops (8), testing (2), agents (+3), syntax (+3), core (+4), impl (+5)
+- All 28 existing skills fully rewritten with fresh research
+- ~85% Frappe Framework surface area coverage
+- MIT license, v2.0 metadata
+- Repository renamed to Frappe_Claude_Skill_Package
+- Social preview banner updated
 
 ### v1.2 (2026-01-18) - GitHub Ready ✅
 

@@ -49,9 +49,29 @@ Alle skills volgen het patroon `frappe-{laag}-{onderwerp}`:
 | README.md | GitHub landing page (v2.0) |
 | HANDOFF.md | Dit bestand |
 
+## V3.0 Upgrade — Gepland
+
+V3.0 brengt de dekking van ~85% naar ~95% met 7 nieuwe skills + 12 uitbreidingen.
+
+**Gap Analysis**: `docs/masterplan/frappe-skill-package-gap-analysis-v3.md`
+
+### Nieuwe skills (7)
+| Prio | Skill | Waarom |
+|:----:|-------|--------|
+| P0 | `frappe-core-translation` | Ieder meertalig project, string extractie regels |
+| P0 | `frappe-core-utils` | 40+ utils die Claude constant heruitvindt |
+| P1 | `frappe-syntax-print` | Print Formats, Print Designer [v15+], Letter Head |
+| P1 | `frappe-syntax-query-builder` | frappe.qb is eigen paradigma, te groot voor sub-sectie |
+| P1 | `frappe-impl-workspace` | Iedere app levert een workspace |
+| P2 | `frappe-core-logging` | Productie logging patterns |
+| P2 | `frappe-core-search` | FullTextSearch API |
+
+### Uitbreidingen (12 bestaande skills)
+Zie gap analysis v3 document voor details per skill.
+
 ## Volgende Sessie
 
-V2.0 is compleet. Mogelijke vervolgacties:
-1. Functionele tests (Level 4-5 uit LESSONS.md)
-2. Community feedback verwerken
-3. Skills inhoudelijk verbeteren op basis van gebruik
+1. Lees ROADMAP.md -> V3.0 sectie
+2. Lees `docs/masterplan/frappe-skill-package-gap-analysis-v3.md`
+3. Start V3.1 (research) of V3.2 (direct P0 skills maken)
+4. Research-first: WebFetch Frappe docs voor translation en utils
