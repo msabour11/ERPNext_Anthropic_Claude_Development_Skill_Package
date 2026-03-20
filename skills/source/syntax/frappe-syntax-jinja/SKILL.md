@@ -13,73 +13,127 @@ metadata:
   version: "2.0"
 ---
 
-# ERPNext Jinja Templates Syntax Skill
+# Frappe Jinja Templates Syntax
 
-> Correct Jinja syntax for Print Formats, Email Templates, and Portal Pages in ERPNext/Frappe v14/v15/v16.
+> Deterministic Jinja reference for Print Formats, Email Templates, Notification Templates, and Portal Pages in Frappe v14/v15/v16.
 
 ---
 
 ## When to Use This Skill
 
-USE this skill when:
-- Creating or modifying Print Formats
-- Developing Email Templates
-- Building Portal Pages (www/*.html)
-- Adding custom Jinja filters/methods via hooks
+USE when:
+- Creating or modifying Print Formats (Jinja-based)
+- Writing Email Templates with dynamic fields
+- Building Portal Pages (`www/*.html`) with Python controllers
+- Writing Notification Templates (system/email/SMS)
+- Registering custom Jinja methods or filters via `hooks.py`
 
 DO NOT USE for:
-- Report Print Formats (they use JavaScript templating, not Jinja)
-- Client Scripts (use frappe-syntax-clientscripts)
-- Server Scripts (use frappe-syntax-serverscripts)
+- Report Print Formats — they use JavaScript templating (`{%= %}`), NOT Jinja
+- Client Scripts — see `frappe-syntax-clientscripts`
+- Server Scripts — see `frappe-syntax-serverscripts`
 
 ---
 
-## Context Objects per Template Type
+## Decision Tree: Which Template Type?
+
+```
+Need a printable document?
+├─ YES → Is it for a Query/Script Report?
+│        ├─ YES → Use JS Template ({%= %}), NOT Jinja
+│        └─ NO  → Use Jinja Print Format
+└─ NO  → Is it for email?
+         ├─ YES → Is it triggered by workflow/notification?
+         │        ├─ YES → Notification Template (Jinja)
+         │        └─ NO  → Email Template (Jinja)
+         └─ NO  → Is it a web page?
+                  ├─ YES → Portal Page (www/*.html + .py controller)
+                  └─ NO  → frappe.render_template() for ad-hoc rendering
+```
+
+---
+
+## Quick Reference: Jinja Syntax
+
+| Syntax | Purpose | Example |
+|--------|---------|---------|
+| `{{ }}` | Output expression | `{{ doc.name }}` |
+| `{% %}` | Control statement | `{% if doc.status == "Paid" %}` |
+| `{# #}` | Comment | `{# This is a comment #}` |
+| `{{ _("text") }}` | Translation | `{{ _("Invoice") }}` |
+| `{{ val \| filter }}` | Filter | `{{ name \| default("N/A") }}` |
+
+### CRITICAL: Jinja vs JS Template Syntax
+
+| Aspect | Jinja (Print Formats) | JS Template (Report Print Formats) |
+|--------|----------------------|-------------------------------------|
+| Output | `{{ expression }}` | `{%= expression %}` |
+| Code block | `{% statement %}` | `{% js_code %}` |
+| Language | Python | JavaScript |
+| Context | `doc`, `frappe` | `data`, `filters` |
+
+**NEVER use Jinja syntax in Report Print Formats. NEVER use `{%= %}` in standard Print Formats.**
+
+---
+
+## Context Objects by Template Type
 
 ### Print Formats
 
 | Object | Description |
 |--------|-------------|
-| `doc` | The document being printed |
-| `frappe` | Frappe module with utility methods |
+| `doc` | The document being printed (full Document object) |
+| `frappe` | Frappe module (whitelisted methods only) |
+| `frappe.utils` | Utility functions |
 | `_()` | Translation function |
+| `doc.items`, `doc.taxes` | Child table accessors (by fieldname) |
 
 ### Email Templates
 
 | Object | Description |
 |--------|-------------|
-| `doc` | The linked document |
+| `doc` | The linked document (when triggered from a DocType) |
 | `frappe` | Frappe module (limited) |
+| `_()` | Translation function |
 
-### Portal Pages
+### Notification Templates
 
 | Object | Description |
 |--------|-------------|
-| `frappe.session.user` | Current user |
-| `frappe.form_dict` | Query parameters |
-| `frappe.lang` | Current language |
-| Custom context | Via Python controller |
+| `doc` | The document that triggered the notification |
+| `frappe` | Frappe module |
+| `_()` | Translation function |
 
-> **See**: `references/context-objects.md` for complete details.
+### Portal Pages (www/*.html)
+
+| Object | Description |
+|--------|-------------|
+| `frappe` | Frappe module |
+| `frappe.session.user` | Current authenticated user |
+| `frappe.form_dict` | Query parameters from URL |
+| `frappe.lang` | Current language code |
+| Custom context | Set via `get_context(context)` in `.py` controller |
+
+> **Full details**: `references/context-objects.md`
 
 ---
 
-## Essential Methods
+## Essential Methods (Whitelisted in Jinja)
 
-### Formatting (ALWAYS use)
+### Formatting — ALWAYS Use for Display
 
 ```jinja
-{# RECOMMENDED for fields in print formats #}
+{# ALWAYS use get_formatted() for fields in Print Formats #}
 {{ doc.get_formatted("posting_date") }}
 {{ doc.get_formatted("grand_total") }}
 
-{# For child table rows - pass parent doc #}
+{# Child table rows — ALWAYS pass parent doc for currency context #}
 {% for row in doc.items %}
     {{ row.get_formatted("rate", doc) }}
     {{ row.get_formatted("amount", doc) }}
 {% endfor %}
 
-{# General formatting #}
+{# General formatting with explicit fieldtype #}
 {{ frappe.format(value, {'fieldtype': 'Currency'}) }}
 {{ frappe.format_date(doc.posting_date) }}
 ```
@@ -87,26 +141,43 @@ DO NOT USE for:
 ### Document Retrieval
 
 ```jinja
-{# Full document #}
+{# Full document — use only when multiple fields needed #}
 {% set customer = frappe.get_doc("Customer", doc.customer) %}
 
-{# Specific field value (more efficient) #}
+{# Single field — ALWAYS prefer over get_doc for one field #}
 {% set abbr = frappe.db.get_value("Company", doc.company, "abbr") %}
 
-{# List of records #}
-{% set tasks = frappe.get_all('Task', 
-    filters={'status': 'Open'}, 
-    fields=['title', 'due_date']) %}
+{# List of records (no permission check) #}
+{% set tasks = frappe.get_all("Task",
+    filters={"status": "Open"},
+    fields=["title", "due_date"],
+    order_by="due_date asc",
+    page_length=10) %}
+
+{# List with permission check (portal pages) #}
+{% set orders = frappe.get_list("Sales Order",
+    filters={"customer": doc.customer},
+    fields=["name", "grand_total"]) %}
 ```
 
-### Translation (REQUIRED for user-facing strings)
+### Translation — REQUIRED for All User-Facing Strings
 
 ```jinja
 <h1>{{ _("Invoice") }}</h1>
-<p>{{ _("Total: {0}").format(doc.grand_total) }}</p>
+<p>{{ _("Total: {0}").format(doc.get_formatted("grand_total")) }}</p>
 ```
 
-> **See**: `references/methods-reference.md` for all methods.
+### System & Session
+
+```jinja
+{{ frappe.get_url() }}
+{{ frappe.get_fullname() }}
+{{ frappe.get_fullname(doc.owner) }}
+{{ frappe.db.get_single_value("System Settings", "time_zone") }}
+{% if frappe.session.user != "Guest" %}...{% endif %}
+```
+
+> **Full method reference**: `references/methods-reference.md`
 
 ---
 
@@ -116,25 +187,25 @@ DO NOT USE for:
 
 ```jinja
 {% if doc.status == "Paid" %}
-    <span class="label-success">{{ _("Paid") }}</span>
+    <span class="paid">{{ _("Paid") }}</span>
 {% elif doc.status == "Overdue" %}
-    <span class="label-danger">{{ _("Overdue") }}</span>
+    <span class="overdue">{{ _("Overdue") }}</span>
 {% else %}
     <span>{{ doc.status }}</span>
 {% endif %}
 ```
 
-### Loops
+### Loops with Child Tables
 
 ```jinja
 {% for item in doc.items %}
-    <tr>
-        <td>{{ loop.index }}</td>
-        <td>{{ item.item_name }}</td>
-        <td>{{ item.get_formatted("amount", doc) }}</td>
-    </tr>
+<tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ item.item_name }}</td>
+    <td>{{ item.get_formatted("amount", doc) }}</td>
+</tr>
 {% else %}
-    <tr><td colspan="3">{{ _("No items") }}</td></tr>
+<tr><td colspan="3">{{ _("No items") }}</td></tr>
 {% endfor %}
 ```
 
@@ -143,54 +214,106 @@ DO NOT USE for:
 | Variable | Description |
 |----------|-------------|
 | `loop.index` | 1-indexed position |
-| `loop.first` | True on first |
-| `loop.last` | True on last |
-| `loop.length` | Total items |
+| `loop.index0` | 0-indexed position |
+| `loop.first` | `True` on first iteration |
+| `loop.last` | `True` on last iteration |
+| `loop.length` | Total number of items |
 
 ### Variables
 
 ```jinja
 {% set total = 0 %}
-{% set customer_name = doc.customer_name | default('Unknown') %}
+{% set name = doc.customer_name | default("Unknown") %}
 ```
 
 ---
 
 ## Filters
 
-### Commonly Used
+| Filter | Example | Notes |
+|--------|---------|-------|
+| `default` | `{{ val \| default("N/A") }}` | ALWAYS use for optional fields |
+| `length` | `{{ items \| length }}` | Count items |
+| `join` | `{{ names \| join(", ") }}` | Join list to string |
+| `truncate` | `{{ text \| truncate(100) }}` | Truncate with ellipsis |
+| `escape` | `{{ input \| escape }}` | HTML-escape (default behavior) |
+| `safe` | `{{ html \| safe }}` | Render raw HTML — NEVER for user input |
+| `round` | `{{ num \| round(2) }}` | Round number |
+| `lower` / `upper` | `{{ text \| upper }}` | Case conversion |
 
-| Filter | Example |
-|--------|---------|
-| `default` | `{{ value \| default('N/A') }}` |
-| `length` | `{{ items \| length }}` |
-| `join` | `{{ names \| join(', ') }}` |
-| `truncate` | `{{ text \| truncate(100) }}` |
-| `safe` | `{{ html \| safe }}` (trusted content only!) |
-
-> **See**: `references/filters-reference.md` for all filters.
+> **Full filter reference**: `references/filters-reference.md`
 
 ---
 
-## Print Format Template
+## Custom Jinja Methods & Filters via hooks.py
+
+### hooks.py Registration
+
+```python
+# hooks.py
+jenv = {
+    "methods": [
+        "myapp.jinja.methods"       # Module with callable functions
+    ],
+    "filters": [
+        "myapp.jinja.filters"       # Module with filter functions
+    ]
+}
+```
+
+### Custom Method
+
+```python
+# myapp/jinja/methods.py
+import frappe
+
+def get_company_logo(company):
+    """Returns company logo URL. Called as get_company_logo() in Jinja."""
+    return frappe.db.get_value("Company", company, "company_logo") or ""
+```
+
+```jinja
+<img src="{{ get_company_logo(doc.company) }}" alt="Logo">
+```
+
+### Custom Filter
+
+```python
+# myapp/jinja/filters.py
+def nl2br(text):
+    """Convert newlines to <br> tags. Used as {{ text | nl2br }}."""
+    return (text or "").replace("\n", "<br>")
+```
+
+```jinja
+{{ doc.notes | nl2br | safe }}
+```
+
+> **Details**: `references/methods.md`
+
+---
+
+## Print Format Patterns
+
+### Minimal Print Format Template
 
 ```jinja
 <style>
-    .header { background: #f5f5f5; padding: 15px; }
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td { border: 1px solid #ddd; padding: 8px; }
+    .print-header { background: #f5f5f5; padding: 15px; }
+    .item-table { width: 100%; border-collapse: collapse; }
+    .item-table th, .item-table td { border: 1px solid #ddd; padding: 8px; }
     .text-right { text-align: right; }
 </style>
 
-<div class="header">
+<div class="print-header">
     <h1>{{ doc.select_print_heading or _("Invoice") }}</h1>
-    <p>{{ doc.name }}</p>
-    <p>{{ _("Date") }}: {{ doc.get_formatted("posting_date") }}</p>
+    <p>{{ doc.name }} — {{ doc.get_formatted("posting_date") }}</p>
 </div>
 
-<table class="table">
+<table class="item-table">
     <thead>
         <tr>
+            <th>#</th>
             <th>{{ _("Item") }}</th>
             <th class="text-right">{{ _("Qty") }}</th>
             <th class="text-right">{{ _("Amount") }}</th>
@@ -199,6 +322,7 @@ DO NOT USE for:
     <tbody>
         {% for row in doc.items %}
         <tr>
+            <td>{{ loop.index }}</td>
             <td>{{ row.item_name }}</td>
             <td class="text-right">{{ row.qty }}</td>
             <td class="text-right">{{ row.get_formatted("amount", doc) }}</td>
@@ -207,56 +331,57 @@ DO NOT USE for:
     </tbody>
 </table>
 
-<p><strong>{{ _("Grand Total") }}:</strong> {{ doc.get_formatted("grand_total") }}</p>
+<p><strong>{{ _("Grand Total") }}: {{ doc.get_formatted("grand_total") }}</strong></p>
+```
+
+### Page Breaks
+
+```css
+/* v14/v15 (wkhtmltopdf) */
+.page-break { page-break-before: always; }
+
+/* v16 (Chrome PDF) — ALWAYS prefer break-* in v16 */
+.page-break { break-before: page; }
+```
+
+> **Full examples**: `references/examples.md` | **Patterns**: `references/patterns.md`
+
+---
+
+## V16: Chrome PDF Rendering
+
+| Aspect | v14/v15 (wkhtmltopdf) | v16 (Chrome) |
+|--------|----------------------|--------------|
+| CSS Support | Limited CSS3 | Full modern CSS |
+| Flexbox/Grid | Partial | Full support |
+| Page breaks | `page-break-*` | `break-*` preferred |
+| Fonts | System fonts only | Web fonts supported |
+
+### V16 Configuration
+
+```json
+// site_config.json
+{
+    "pdf_engine": "chrome",
+    "chrome_path": "/usr/bin/chromium"
+}
 ```
 
 ---
 
-## Email Template
-
-```jinja
-<p>{{ _("Dear") }} {{ doc.customer_name }},</p>
-
-<p>{{ _("Invoice") }} <strong>{{ doc.name }}</strong> {{ _("for") }} 
-{{ doc.get_formatted("grand_total") }} {{ _("is due.") }}</p>
-
-<p>{{ _("Due Date") }}: {{ frappe.format_date(doc.due_date) }}</p>
-
-{% if doc.items %}
-<ul>
-{% for item in doc.items %}
-    <li>{{ item.item_name }} - {{ item.qty }} x {{ item.get_formatted("rate", doc) }}</li>
-{% endfor %}
-</ul>
-{% endif %}
-
-<p>{{ _("Best regards") }},<br>
-{{ frappe.db.get_value("Company", doc.company, "company_name") }}</p>
-```
-
----
-
-## Portal Page with Controller
+## Portal Page Pattern
 
 ### www/projects/index.html
 
 ```jinja
 {% extends "templates/web.html" %}
-
 {% block title %}{{ _("Projects") }}{% endblock %}
 
 {% block page_content %}
 <h1>{{ _("Projects") }}</h1>
-
-{% if frappe.session.user != 'Guest' %}
-    <p>{{ _("Welcome") }}, {{ frappe.get_fullname() }}</p>
-{% endif %}
-
 {% for project in projects %}
-    <div class="project">
-        <h3>{{ project.title }}</h3>
-        <p>{{ project.description | truncate(150) }}</p>
-    </div>
+    <h3>{{ project.title }}</h3>
+    <p>{{ project.description | default("") | truncate(150) }}</p>
 {% else %}
     <p>{{ _("No projects found.") }}</p>
 {% endfor %}
@@ -270,152 +395,61 @@ import frappe
 
 def get_context(context):
     context.title = "Projects"
-    context.projects = frappe.get_all(
-        "Project",
+    context.no_cache = True
+    context.projects = frappe.get_all("Project",
         filters={"is_public": 1},
         fields=["name", "title", "description"],
-        order_by="creation desc"
-    )
+        order_by="creation desc")
     return context
 ```
 
----
-
-## Custom Filters/Methods via jenv Hook
-
-### hooks.py
-
-```python
-jenv = {
-    "methods": ["myapp.jinja.methods"],
-    "filters": ["myapp.jinja.filters"]
-}
-```
-
-### myapp/jinja/methods.py
-
-```python
-import frappe
-
-def get_company_logo(company):
-    """Get company logo URL"""
-    return frappe.db.get_value("Company", company, "company_logo") or ""
-```
-
-### Usage
-
-```jinja
-<img src="{{ get_company_logo(doc.company) }}">
-```
+> **Full structure**: `references/structure.md` | **Templates**: `references/templates.md`
 
 ---
 
 ## Critical Rules
 
-### ✅ ALWAYS
+### ALWAYS
 
-1. Use `_()` for all user-facing strings
-2. Use `get_formatted()` for currency/date fields
-3. Use default values: `{{ value | default('') }}`
-4. Child table rows: `row.get_formatted("field", doc)`
+1. Use `_()` for ALL user-facing strings
+2. Use `get_formatted()` for currency, date, and numeric fields
+3. Use `default()` filter for optional/nullable fields
+4. Pass parent `doc` to child row `get_formatted("field", doc)`
+5. Use `frappe.db.get_value()` when you need only one field
+6. Keep calculations in Python controllers, not Jinja templates
 
-### ❌ NEVER
+### NEVER
 
-1. Execute queries in loops (N+1 problem)
-2. Use `| safe` for user input (XSS risk)
-3. Heavy calculations in templates (do in Python)
-4. Jinja syntax in Report Print Formats (they use JS)
+1. Execute database queries inside loops (N+1 problem)
+2. Use `| safe` on user-supplied input (XSS vulnerability)
+3. Use Jinja syntax in Report Print Formats (they require JS `{%= %}`)
+4. Use `frappe.get_doc()` when `frappe.db.get_value()` suffices
+5. Hardcode strings without `_()` translation wrapper
+6. Disable `safe_render` without security review
 
----
-
-## Report Print Formats (NOT Jinja!)
-
-**WARNING**: Report Print Formats for Query/Script Reports use JavaScript templating.
-
-| Aspect | Jinja (Print Formats) | JS (Report Print Formats) |
-|--------|----------------------|---------------------------|
-| Output | `{{ }}` | `{%= %}` |
-| Code | `{% %}` | `{% %}` |
-| Language | Python | JavaScript |
-
-```html
-<!-- JS Template for Reports -->
-{% for(var i=0; i<data.length; i++) { %}
-<tr><td>{%= data[i].name %}</td></tr>
-{% } %}
-```
+> **Anti-patterns with fixes**: `references/anti-patterns.md`
 
 ---
-
-## Version Compatibility
-
-| Feature | v14 | v15 |
-|---------|:---:|:---:|
-| Basic Jinja API | ✅ | ✅ |
-| get_formatted() | ✅ | ✅ |
-| jenv hook | ✅ | ✅ |
-| Portal pages | ✅ | ✅ |
-| frappe.utils.format_date with format | ✅ | ✅+ |
-
----
-## V16: Chrome PDF Rendering
-
-**Version 16 introduced Chrome-based PDF rendering** replacing wkhtmltopdf.
-
-### Key Differences
-
-| Aspect | v14/v15 (wkhtmltopdf) | v16 (Chrome) |
-|--------|----------------------|---------------|
-| CSS Support | Limited CSS3 | Full modern CSS |
-| Flexbox/Grid | Partial | Full support |
-| Page breaks | `page-break-*` | `break-*` preferred |
-| Fonts | System fonts | Web fonts supported |
-| Performance | Faster | Slightly slower |
-
-### CSS Updates for V16
-
-```css
-/* v14/v15 */
-.page-break { page-break-before: always; }
-
-/* v16 - both work, but break-* is preferred */
-.page-break { break-before: page; }
-```
-
-### Configuration (V16)
-
-```python
-# In site_config.json
-{
-    "pdf_engine": "chrome",  # or "wkhtmltopdf" for legacy
-    "chrome_path": "/usr/bin/chromium"
-}
-```
-
-### Print Format Compatibility
-
-Most print formats work unchanged. Update if using:
-- Complex CSS layouts (flexbox/grid now fully supported)
-- Custom fonts (web fonts now work)
-- Advanced page break control
-
----
-
 
 ## Reference Files
 
 | File | Contents |
 |------|----------|
+| `references/syntax.md` | Jinja syntax reference (tags, filters, tests, loops) |
+| `references/methods.md` | Custom Jinja methods/filters via hooks |
 | `references/context-objects.md` | Available objects per template type |
-| `references/methods-reference.md` | All frappe.* methods |
-| `references/filters-reference.md` | Standard and custom filters |
-| `references/examples.md` | Complete working examples |
-| `references/anti-patterns.md` | Mistakes to avoid |
+| `references/filters-reference.md` | All standard and custom Frappe filters |
+| `references/methods-reference.md` | All frappe.* methods available in Jinja |
+| `references/examples.md` | Complete Print Format, Email, Portal examples |
+| `references/anti-patterns.md` | Common mistakes and correct alternatives |
+| `references/templates.md` | Template structure patterns |
+| `references/patterns.md` | Conditional rendering, loops, child tables |
+| `references/structure.md` | File structure for template types |
 
 ---
 
 ## See Also
 
-- `frappe-syntax-hooks` - For jenv configuration in hooks.py
-- `frappe-impl-jinja` - For implementation patterns
-- `frappe-errors-serverscripts` - For server-side error handling
+- `frappe-syntax-hooks` — jenv configuration in hooks.py
+- `frappe-impl-printformat` — Print Format implementation patterns
+- `frappe-errors-serverscripts` — Server-side error handling

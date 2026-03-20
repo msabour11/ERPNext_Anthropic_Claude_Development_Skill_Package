@@ -1,130 +1,96 @@
-# Server Script Examples
+# Server Script Examples — All Script Types
 
-## Table of Contents
-
-1. [Document Event Examples](#document-event-examples)
-2. [API Examples](#api-examples)
-3. [Scheduler Event Examples](#scheduler-event-examples)
-4. [Permission Query Examples](#permission-query-examples)
+Every example uses ONLY the pre-loaded sandbox namespace. No import statements.
 
 ---
 
 ## Document Event Examples
 
-### 1. Validation with error message
-
-**Script Type**: Document Event  
-**DocType Event**: Before Save  
-**Reference DocType**: Sales Invoice
+### 1. Field Validation (Before Save)
 
 ```python
-# Validate minimum order amount
-if doc.grand_total < 100:
-    frappe.throw("Minimum order amount is $100")
+# Config: DocType = Sales Invoice, Event = Before Save
+if doc.grand_total < 0:
+    frappe.throw("Grand total MUST NOT be negative")
 
-# Validate percentage
 if doc.discount_percentage and doc.discount_percentage > 50:
     frappe.throw("Discount cannot exceed 50%", title="Validation Error")
 ```
 
-### 2. Auto-calculate fields
-
-**Script Type**: Document Event  
-**DocType Event**: Before Save  
-**Reference DocType**: Sales Order
+### 2. Auto-Calculate Fields (Before Save)
 
 ```python
-# Calculate total from child items
-doc.total_qty = sum(item.qty or 0 for item in doc.items)
-doc.total_weight = sum((item.qty or 0) * (item.weight_per_unit or 0) for item in doc.items)
+# Config: DocType = Sales Order, Event = Before Save
+doc.total_qty = sum(frappe.utils.flt(item.qty) for item in doc.items)
+doc.total_weight = sum(
+    frappe.utils.flt(item.qty) * frappe.utils.flt(item.weight_per_unit)
+    for item in doc.items
+)
 
-# Set status based on total
 if doc.grand_total > 10000:
     doc.priority = "High"
     doc.requires_approval = 1
 ```
 
-### 3. Auto-fill related data
-
-**Script Type**: Document Event  
-**DocType Event**: Before Save  
-**Reference DocType**: Sales Invoice
+### 3. Auto-Fill from Linked Document (Before Save)
 
 ```python
-# Fetch customer data if not set
+# Config: DocType = Sales Invoice, Event = Before Save
 if doc.customer and not doc.customer_name:
-    doc.customer_name = frappe.db.get_value("Customer", doc.customer, "customer_name")
+    doc.customer_name = frappe.db.get_value(
+        "Customer", doc.customer, "customer_name")
 
-# Fetch territory from customer
 if doc.customer and not doc.territory:
-    doc.territory = frappe.db.get_value("Customer", doc.customer, "territory")
+    doc.territory = frappe.db.get_value(
+        "Customer", doc.customer, "territory")
 ```
 
-### 4. Create related document
-
-**Script Type**: Document Event  
-**DocType Event**: After Insert  
-**Reference DocType**: Sales Order
+### 4. Create Related Document (After Insert)
 
 ```python
-# Create ToDo for sales team
+# Config: DocType = Sales Order, Event = After Insert
 frappe.get_doc({
     "doctype": "ToDo",
     "allocated_to": doc.owner,
     "reference_type": "Sales Order",
     "reference_name": doc.name,
-    "description": f"New order {doc.name} - Follow up with customer",
+    "description": f"New order {doc.name} — follow up with customer",
     "date": frappe.utils.add_days(frappe.utils.today(), 1)
 }).insert(ignore_permissions=True)
 ```
 
-### 5. Pre-submit validation
-
-**Script Type**: Document Event  
-**DocType Event**: Before Submit  
-**Reference DocType**: Purchase Order
+### 5. Pre-Submit Validation (Before Submit)
 
 ```python
-# Check budget approval for large orders
+# Config: DocType = Purchase Order, Event = Before Submit
 if doc.grand_total > 50000:
     if not doc.budget_approval:
-        frappe.throw("Budget approval required for orders over $50,000")
-    
-    # Check that approver is not the creator
+        frappe.throw("Budget approval required for orders over 50,000")
     if doc.approved_by == doc.owner:
-        frappe.throw("Order cannot be approved by its creator")
+        frappe.throw("Order MUST NOT be approved by its creator")
 ```
 
-### 6. Post-submit actions
-
-**Script Type**: Document Event  
-**DocType Event**: After Submit  
-**Reference DocType**: Sales Invoice
+### 6. Post-Submit Side Effects (After Submit)
 
 ```python
-# Update customer statistics
-customer_doc = frappe.get_doc("Customer", doc.customer)
-
-# Count total invoices
-total_invoices = frappe.db.count("Sales Invoice", 
+# Config: DocType = Sales Invoice, Event = After Submit
+total_invoices = frappe.db.count("Sales Invoice",
     filters={"customer": doc.customer, "docstatus": 1})
+frappe.db.set_value("Customer", doc.customer,
+    "total_invoices", total_invoices)
 
-# Update custom field
-frappe.db.set_value("Customer", doc.customer, "total_invoices", total_invoices)
-
-# Send notification for high-value invoice
 if doc.grand_total > 10000:
-    frappe.msgprint(f"High-value invoice {doc.name} created", alert=True)
+    frappe.sendmail(
+        recipients=[doc.owner],
+        subject=f"High-value invoice {doc.name}",
+        message=f"Invoice {doc.name} for {doc.grand_total} has been submitted."
+    )
 ```
 
-### 7. Cancel validation
-
-**Script Type**: Document Event  
-**DocType Event**: Before Cancel  
-**Reference DocType**: Sales Invoice
+### 7. Cancel Guard (Before Cancel)
 
 ```python
-# Check if there are payments
+# Config: DocType = Sales Invoice, Event = Before Cancel
 payments = frappe.get_all("Payment Entry Reference",
     filters={
         "reference_doctype": "Sales Invoice",
@@ -133,57 +99,75 @@ payments = frappe.get_all("Payment Entry Reference",
     },
     fields=["parent"]
 )
-
 if payments:
     frappe.throw(
-        f"Cannot cancel: invoice has {len(payments)} linked payment(s). "
+        f"Cannot cancel: {len(payments)} linked payment(s) exist. "
         "Cancel the payments first.",
         title="Cancellation Blocked"
     )
 ```
 
-### 8. Audit logging
-
-**Script Type**: Document Event  
-**DocType Event**: After Save  
-**Reference DocType**: Sales Order
+### 8. Set Default Values (Before Insert)
 
 ```python
-# Log important changes
-log_msg = f"Sales Order {doc.name} updated\n"
-log_msg += f"Status: {doc.status}\n"
-log_msg += f"Total: {doc.grand_total}\n"
-log_msg += f"Modified by: {frappe.session.user}"
+# Config: DocType = Sales Order, Event = Before Insert
+if not doc.delivery_date:
+    doc.delivery_date = frappe.utils.add_days(frappe.utils.today(), 7)
 
-frappe.log_error(log_msg, "Sales Order Audit")
+if not doc.currency:
+    doc.currency = frappe.db.get_single_value(
+        "Global Defaults", "default_currency") or "USD"
+```
+
+### 9. Prevent Infinite Loop with Flags
+
+```python
+# Config: DocType = Sales Order, Event = After Save
+# Updating a related doc that might trigger this script again
+if not doc.flags.get("skip_sync"):
+    linked = frappe.get_doc("Project", doc.project)
+    linked.flags.skip_sync = True
+    linked.total_orders = frappe.db.count("Sales Order",
+        filters={"project": doc.project, "docstatus": 1})
+    linked.save(ignore_permissions=True)
+```
+
+### 10. Child Table Validation (Before Save)
+
+```python
+# Config: DocType = Sales Order, Event = Before Save
+seen_items = []
+for item in doc.items:
+    if item.item_code in seen_items:
+        frappe.throw(f"Duplicate item {item.item_code} in row {item.idx}")
+    seen_items.append(item.item_code)
+
+    if frappe.utils.flt(item.qty) <= 0:
+        frappe.throw(f"Quantity must be > 0 in row {item.idx}")
+
+    if frappe.utils.flt(item.rate) <= 0:
+        frappe.throw(f"Rate must be > 0 in row {item.idx}")
 ```
 
 ---
 
 ## API Examples
 
-### 9. Basic GET endpoint
-
-**Script Type**: API  
-**API Method**: get_customer_orders  
-**Allow Guest**: No
+### 11. GET Endpoint with Permission Check
 
 ```python
-# Endpoint: /api/method/get_customer_orders?customer=CUST-001
+# Config: Script Type = API, Method = get_customer_orders, Allow Guest = No
+# Endpoint: GET /api/method/get_customer_orders?customer=CUST-001
 
 customer = frappe.form_dict.get("customer")
 if not customer:
     frappe.throw("Parameter 'customer' is required")
 
-# Check permissions
 if not frappe.has_permission("Sales Order", "read"):
     frappe.throw("Access denied", frappe.PermissionError)
 
 orders = frappe.get_all("Sales Order",
-    filters={
-        "customer": customer,
-        "docstatus": 1
-    },
+    filters={"customer": customer, "docstatus": 1},
     fields=["name", "transaction_date", "grand_total", "status"],
     order_by="transaction_date desc",
     limit=20
@@ -196,15 +180,11 @@ frappe.response["message"] = {
 }
 ```
 
-### 10. POST endpoint with data processing
-
-**Script Type**: API  
-**API Method**: update_order_status  
-**Allow Guest**: No
+### 12. POST Endpoint with Input Validation
 
 ```python
+# Config: Script Type = API, Method = update_order_status, Allow Guest = No
 # Endpoint: POST /api/method/update_order_status
-# Body: {"order": "SO-001", "status": "Completed"}
 
 order_name = frappe.form_dict.get("order")
 new_status = frappe.form_dict.get("status")
@@ -212,50 +192,34 @@ new_status = frappe.form_dict.get("status")
 if not order_name or not new_status:
     frappe.throw("Parameters 'order' and 'status' are required")
 
-# Validate status value
-valid_statuses = ["Open", "Completed", "On Hold", "Cancelled"]
+valid_statuses = ["Open", "Completed", "On Hold"]
 if new_status not in valid_statuses:
-    frappe.throw(f"Invalid status. Choose from: {', '.join(valid_statuses)}")
+    frappe.throw(f"Invalid status. Valid: {', '.join(valid_statuses)}")
 
-# Check permission for specific document
 if not frappe.has_permission("Sales Order", "write", order_name):
-    frappe.throw("No write permission for this order", frappe.PermissionError)
+    frappe.throw("No write permission", frappe.PermissionError)
 
-# Update status
 frappe.db.set_value("Sales Order", order_name, "status", new_status)
-
-frappe.response["message"] = {
-    "success": True,
-    "order": order_name,
-    "new_status": new_status
-}
+frappe.response["message"] = {"success": True, "new_status": new_status}
 ```
 
-### 11. Dashboard data endpoint
-
-**Script Type**: API  
-**API Method**: get_sales_dashboard  
-**Allow Guest**: No
+### 13. Dashboard Data Endpoint
 
 ```python
-# Endpoint: /api/method/get_sales_dashboard
+# Config: Script Type = API, Method = get_sales_dashboard, Allow Guest = No
 
 today = frappe.utils.today()
 month_start = frappe.utils.get_first_day(today)
 
-# Orders today
 orders_today = frappe.db.count("Sales Order",
     filters={"transaction_date": today, "docstatus": 1})
 
-# Revenue this month
-month_sales = frappe.db.sql("""
+month_revenue = frappe.db.sql("""
     SELECT COALESCE(SUM(grand_total), 0) as total
     FROM `tabSales Invoice`
-    WHERE posting_date >= %(month_start)s
-    AND docstatus = 1
-""", {"month_start": month_start}, as_dict=True)
+    WHERE posting_date >= %(start)s AND docstatus = 1
+""", {"start": month_start}, as_dict=True)
 
-# Top 5 customers
 top_customers = frappe.get_all("Sales Invoice",
     filters={"posting_date": [">=", month_start], "docstatus": 1},
     fields=["customer", "sum(grand_total) as total"],
@@ -266,75 +230,78 @@ top_customers = frappe.get_all("Sales Invoice",
 
 frappe.response["message"] = {
     "orders_today": orders_today,
-    "month_sales": month_sales[0].total if month_sales else 0,
+    "month_revenue": month_revenue[0].total if month_revenue else 0,
     "top_customers": top_customers
 }
 ```
 
-### 12. Public endpoint (guest access)
-
-**Script Type**: API  
-**API Method**: check_product_availability  
-**Allow Guest**: Yes
+### 14. Public Guest Endpoint
 
 ```python
-# Endpoint: /api/method/check_product_availability?item=ITEM-001
+# Config: Script Type = API, Method = check_availability, Allow Guest = Yes
+# NEVER expose sensitive data in guest endpoints
 
 item_code = frappe.form_dict.get("item")
 if not item_code:
     frappe.throw("Parameter 'item' is required")
 
-# Only show published items
-item = frappe.db.get_value("Item", item_code, 
-    ["item_name", "stock_uom", "is_stock_item", "disabled"],
-    as_dict=True)
+item = frappe.db.get_value("Item", item_code,
+    ["item_name", "stock_uom", "disabled"], as_dict=True)
 
 if not item or item.disabled:
-    frappe.response["message"] = {
-        "available": False,
-        "message": "Product not found"
-    }
+    frappe.response["message"] = {"available": False}
 else:
-    # Get stock (simplified)
     stock = frappe.db.get_value("Bin",
-        {"item_code": item_code},
-        "sum(actual_qty) as qty") or 0
-    
+        {"item_code": item_code}, "sum(actual_qty)") or 0
     frappe.response["message"] = {
-        "available": stock > 0,
+        "available": frappe.utils.flt(stock) > 0,
         "item_name": item.item_name,
-        "stock_qty": stock,
         "uom": item.stock_uom
     }
+```
+
+### 15. External API Integration
+
+```python
+# Config: Script Type = API, Method = sync_external_data, Allow Guest = No
+
+api_key = frappe.db.get_single_value("My Settings", "api_key")
+if not api_key:
+    frappe.throw("API key not configured")
+
+response = frappe.make_get_request(
+    "https://api.example.com/data",
+    headers={"Authorization": f"Bearer {api_key}"}
+)
+
+frappe.response["message"] = {
+    "synced": True,
+    "records": len(response.get("data", []))
+}
 ```
 
 ---
 
 ## Scheduler Event Examples
 
-### 13. Daily reminder
-
-**Script Type**: Scheduler Event  
-**Event Frequency**: Cron  
-**Cron Format**: `0 9 * * *` (daily at 9:00)
+### 16. Daily Overdue Invoice Reminders
 
 ```python
-# Send reminders for overdue invoices
+# Config: Script Type = Scheduler Event, Cron = 0 9 * * *
 today = frappe.utils.today()
 
-overdue_invoices = frappe.get_all("Sales Invoice",
+overdue = frappe.get_all("Sales Invoice",
     filters={
         "status": "Unpaid",
         "due_date": ["<", today],
         "docstatus": 1
     },
-    fields=["name", "customer", "grand_total", "due_date", "owner"]
+    fields=["name", "customer", "grand_total", "due_date", "owner"],
+    limit=200
 )
 
-for inv in overdue_invoices:
+for inv in overdue:
     days_overdue = frappe.utils.date_diff(today, inv.due_date)
-    
-    # Create ToDo for sales rep
     if not frappe.db.exists("ToDo", {
         "reference_type": "Sales Invoice",
         "reference_name": inv.name,
@@ -345,37 +312,29 @@ for inv in overdue_invoices:
             "allocated_to": inv.owner,
             "reference_type": "Sales Invoice",
             "reference_name": inv.name,
-            "description": f"Invoice {inv.name} is {days_overdue} days overdue. Total: {inv.grand_total}"
+            "description": f"Invoice {inv.name} is {days_overdue} days overdue"
         }).insert(ignore_permissions=True)
 
-frappe.db.commit()
+frappe.db.commit()  # ALWAYS commit in scheduler scripts
 ```
 
-### 14. Weekly cleanup
-
-**Script Type**: Scheduler Event  
-**Event Frequency**: Cron  
-**Cron Format**: `0 2 * * 0` (Sunday 02:00)
+### 17. Weekly Draft Cleanup
 
 ```python
-# Delete old draft documents (older than 30 days)
-cutoff_date = frappe.utils.add_days(frappe.utils.today(), -30)
+# Config: Script Type = Scheduler Event, Cron = 0 2 * * 0
+cutoff = frappe.utils.add_days(frappe.utils.today(), -30)
 
-# Find old drafts
 old_drafts = frappe.get_all("Sales Order",
-    filters={
-        "docstatus": 0,
-        "modified": ["<", cutoff_date]
-    },
+    filters={"docstatus": 0, "modified": ["<", cutoff]},
     fields=["name"],
-    limit=100  # Batch limit
+    limit=100
 )
 
-deleted_count = 0
+deleted = 0
 for draft in old_drafts:
     try:
         frappe.delete_doc("Sales Order", draft.name, force=True)
-        deleted_count += 1
+        deleted += 1
     except Exception:
         frappe.log_error(
             f"Could not delete draft {draft.name}",
@@ -384,74 +343,35 @@ for draft in old_drafts:
 
 frappe.db.commit()
 
-if deleted_count > 0:
-    frappe.log_error(
-        f"Cleanup: {deleted_count} old drafts deleted",
-        "Weekly Cleanup"
-    )
+if deleted > 0:
+    frappe.log_error(f"Deleted {deleted} old draft Sales Orders", "Weekly Cleanup")
 ```
 
-### 15. Every 15 minutes sync
-
-**Script Type**: Scheduler Event  
-**Event Frequency**: Cron  
-**Cron Format**: `*/15 * * * *` (every 15 minutes)
+### 18. Monthly Summary Report
 
 ```python
-# Sync external data (example: exchange rates)
-# This is a placeholder - external API calls don't work in sandbox
-
-last_sync = frappe.db.get_single_value("Sync Settings", "last_sync") or ""
-now = frappe.utils.now()
-
-# Check if sync is needed
-if last_sync:
-    minutes_since = frappe.utils.time_diff_in_seconds(now, last_sync) / 60
-    if minutes_since < 14:  # Skip if recently synced
-        return
-
-# Log sync attempt
-frappe.log_error(f"Sync started at {now}", "External Sync")
-
-# Update last sync time
-frappe.db.set_single_value("Sync Settings", "last_sync", now)
-frappe.db.commit()
-```
-
-### 16. Monthly reporting
-
-**Script Type**: Scheduler Event  
-**Event Frequency**: Cron  
-**Cron Format**: `0 6 1 * *` (1st of month at 06:00)
-
-```python
-# Generate monthly sales summary
-last_month_start = frappe.utils.add_months(
+# Config: Script Type = Scheduler Event, Cron = 0 6 1 * *
+prev_start = frappe.utils.add_months(
     frappe.utils.get_first_day(frappe.utils.today()), -1)
-last_month_end = frappe.utils.get_last_day(last_month_start)
+prev_end = frappe.utils.get_last_day(prev_start)
 
-# Sales totals
 summary = frappe.db.sql("""
-    SELECT 
-        COUNT(*) as invoice_count,
-        COALESCE(SUM(grand_total), 0) as total_revenue,
-        COUNT(DISTINCT customer) as unique_customers
+    SELECT
+        COUNT(*) as count,
+        COALESCE(SUM(grand_total), 0) as revenue,
+        COUNT(DISTINCT customer) as customers
     FROM `tabSales Invoice`
     WHERE posting_date BETWEEN %(start)s AND %(end)s
     AND docstatus = 1
-""", {"start": last_month_start, "end": last_month_end}, as_dict=True)[0]
+""", {"start": prev_start, "end": prev_end}, as_dict=True)[0]
 
-# Create report record
-report_msg = f"""
-Monthly Sales Summary
-Period: {last_month_start} to {last_month_end}
-
-Invoices: {summary.invoice_count}
-Revenue: ${summary.total_revenue:,.2f}
-Unique customers: {summary.unique_customers}
-"""
-
-frappe.log_error(report_msg, "Monthly Sales Report")
+frappe.log_error(
+    f"Monthly Report ({prev_start} to {prev_end})\n"
+    f"Invoices: {summary.count}\n"
+    f"Revenue: {summary.revenue}\n"
+    f"Customers: {summary.customers}",
+    "Monthly Sales Report"
+)
 frappe.db.commit()
 ```
 
@@ -459,89 +379,51 @@ frappe.db.commit()
 
 ## Permission Query Examples
 
-### 17. Basic role-based filtering
-
-**Script Type**: Permission Query  
-**Reference DocType**: Sales Invoice
+### 19. Role-Based Filtering
 
 ```python
-# Filter documents based on user role
-user_roles = frappe.get_roles(user)
+# Config: Script Type = Permission Query, DocType = Sales Invoice
+# Variables available: user, conditions
 
-if "System Manager" in user_roles or "Accounts Manager" in user_roles:
-    # Full access
+roles = frappe.get_roles(user)
+if "System Manager" in roles or "Accounts Manager" in roles:
     conditions = ""
-elif "Sales User" in user_roles:
-    # Only own invoices
+elif "Sales User" in roles:
     conditions = f"`tabSales Invoice`.owner = {frappe.db.escape(user)}"
 else:
-    # No access
     conditions = "1=0"
 ```
 
-### 18. Territory-based filtering
-
-**Script Type**: Permission Query  
-**Reference DocType**: Customer
+### 20. Territory-Based Filtering
 
 ```python
-# Filter customers based on user's territory
+# Config: Script Type = Permission Query, DocType = Customer
+
 user_territory = frappe.db.get_value("User", user, "territory")
 
-if not user_territory:
-    # If no territory, show nothing (or everything for managers)
-    if "Sales Manager" in frappe.get_roles(user):
-        conditions = ""
-    else:
-        conditions = "1=0"
-else:
-    # Only customers in user's territory
+if "Sales Manager" in frappe.get_roles(user):
+    conditions = ""
+elif user_territory:
     conditions = f"`tabCustomer`.territory = {frappe.db.escape(user_territory)}"
+else:
+    conditions = "1=0"
 ```
 
-### 19. Company-based filtering
-
-**Script Type**: Permission Query  
-**Reference DocType**: Sales Order
+### 21. Company-Based Filtering
 
 ```python
-# Filter based on allowed companies
-allowed_companies = frappe.get_all("User Permission",
+# Config: Script Type = Permission Query, DocType = Sales Order
+
+allowed = frappe.get_all("User Permission",
     filters={"user": user, "allow": "Company"},
     pluck="for_value"
 )
 
-if not allowed_companies:
-    # If no company permissions, use default company
-    default_company = frappe.db.get_single_value("Global Defaults", "default_company")
-    if default_company:
-        conditions = f"`tabSales Order`.company = {frappe.db.escape(default_company)}"
-    else:
-        conditions = ""
-elif len(allowed_companies) == 1:
-    conditions = f"`tabSales Order`.company = {frappe.db.escape(allowed_companies[0])}"
-else:
-    company_list = ", ".join(frappe.db.escape(c) for c in allowed_companies)
-    conditions = f"`tabSales Order`.company IN ({company_list})"
-```
-
-### 20. Status-based filtering
-
-**Script Type**: Permission Query  
-**Reference DocType**: Task
-
-```python
-# Show only open tasks to normal users
-user_roles = frappe.get_roles(user)
-
-if "Project Manager" in user_roles:
-    # Managers see everything
+if not allowed:
     conditions = ""
+elif len(allowed) == 1:
+    conditions = f"`tabSales Order`.company = {frappe.db.escape(allowed[0])}"
 else:
-    # Others see only their own open tasks
-    conditions = f"""
-        (`tabTask`.owner = {frappe.db.escape(user)} 
-         OR `tabTask`.assigned_to = {frappe.db.escape(user)})
-        AND `tabTask`.status NOT IN ('Cancelled', 'Completed')
-    """
+    escaped = ", ".join(frappe.db.escape(c) for c in allowed)
+    conditions = f"`tabSales Order`.company IN ({escaped})"
 ```

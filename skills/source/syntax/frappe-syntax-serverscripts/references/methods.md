@@ -1,121 +1,80 @@
-# Available Methods in Server Script Sandbox
+# Server Script Sandbox — Complete Method Reference
 
-## Table of Contents
-
-1. [Sandbox Overview](#sandbox-overview)
-2. [Doc Object](#doc-object)
-3. [frappe.db - Database](#frappedb---database)
-4. [frappe Document Methods](#frappe-document-methods)
-5. [frappe.utils - Utilities](#frappeutils---utilities)
-6. [frappe Messaging](#frappe-messaging)
-7. [frappe.session](#frappesession)
-8. [API Script Specific](#api-script-specific)
-9. [Python Builtins](#python-builtins)
+All methods available inside the RestrictedPython sandbox. NEVER use import
+statements — everything listed here is pre-loaded.
 
 ---
 
-## Sandbox Overview
-
-Server Scripts run in a secure sandbox with limited access:
-
-### ✅ Available
-
-- `doc` object (in Document Event)
-- `frappe` namespace (limited)
-- `frappe.db` database operations
-- `frappe.utils` utilities
-- Limited Python builtins
-
-### ❌ NOT Available
-
-```python
-# WRONG - These do NOT work:
-import json                    # ImportError
-from datetime import date      # ImportError
-import requests                # ImportError
-open("/etc/passwd")            # No file access
-os.system("ls")                # No os module
-eval("code")                   # Blocked
-exec("code")                   # Blocked
-```
-
----
-
-## Doc Object
-
-In Document Event scripts, the `doc` object is automatically available:
+## doc Object (Document Event Scripts Only)
 
 ### Properties
 
 ```python
-doc.name           # str: Document name/ID
-doc.doctype        # str: DocType name
-doc.docstatus      # int: 0=Draft, 1=Submitted, 2=Cancelled
-doc.owner          # str: Creator (email)
-doc.modified_by    # str: Last modified by
-doc.creation       # datetime: Creation date
-doc.modified       # datetime: Modification date
+doc.name              # str — Document ID (NOT available in Before Insert)
+doc.doctype           # str — DocType name
+doc.docstatus         # int — 0=Draft, 1=Submitted, 2=Cancelled
+doc.owner             # str — Creator email
+doc.modified_by       # str — Last modifier email
+doc.creation          # datetime — Creation timestamp
+doc.modified          # datetime — Last modification timestamp
+doc.flags             # _dict — Transient flags (not persisted)
 
-# Every field from the DocType
-doc.customer       # Link field
-doc.grand_total    # Currency field
-doc.items          # Child table (list)
+# Every DocType field is a direct attribute:
+doc.customer          # Link field value
+doc.grand_total       # Currency field value
+doc.items             # Child table (list of child doc objects)
 ```
 
 ### Methods
 
 ```python
-# Safe field access (no KeyError)
-doc.get("fieldname")                    # Returns None if not exists
+doc.get("fieldname")                    # Safe access — returns None if missing
 doc.get("fieldname", "default")         # With default value
-
-# Check if field exists/has value
-doc.get("status")                       # Truthy check
+doc.update({"field1": val1, ...})       # Set multiple fields at once
+doc.append("child_table", {...})        # Add row to child table
+doc.as_dict()                           # Convert to dictionary
+doc.db_set("field", value)              # Direct DB update (After Save only)
+doc.add_comment("Info", "text")         # Add comment to document
+doc.add_tag("tag_name")                 # Add tag
+doc.get_tags()                          # Get tags list
 
 # Child table iteration
 for item in doc.items:
-    item.qty
-    item.rate
-    item.amount
-```
-
-### Modifying Fields
-
-```python
-# Direct assignment
-doc.status = "Approved"
-doc.total = 1000
-
-# Multiple fields
-doc.update({
-    "status": "Approved",
-    "approved_by": frappe.session.user
-})
+    item.item_code      # Child field
+    item.qty            # Child field
+    item.idx            # Row number (1-based)
+    item.parent         # Parent document name
+    item.parenttype     # Parent DocType name
 ```
 
 ---
 
-## frappe.db - Database
+## frappe.db — Database Operations
 
-### Get single value
+### Single Value
 
 ```python
-# get_value(doctype, name, fieldname)
-customer_name = frappe.db.get_value("Customer", "CUST-001", "customer_name")
+# Get one field from one document
+val = frappe.db.get_value("Customer", "CUST-001", "customer_name")
 
-# Multiple fields
-values = frappe.db.get_value("Customer", "CUST-001", 
+# Get multiple fields as dict
+vals = frappe.db.get_value("Customer", "CUST-001",
     ["customer_name", "territory"], as_dict=True)
-# Returns: {"customer_name": "...", "territory": "..."}
 
-# With filters (for first match)
+# Get value with filters (returns first match)
 email = frappe.db.get_value("User", {"first_name": "John"}, "email")
+
+# Get value from Singles DocType
+company = frappe.db.get_single_value("Global Defaults", "default_company")
+
+# Get default value
+default = frappe.db.get_default("currency")
 ```
 
-### Set value
+### Set Value
 
 ```python
-# set_value(doctype, name, fieldname, value)
+# Single field
 frappe.db.set_value("Customer", "CUST-001", "status", "Active")
 
 # Multiple fields
@@ -123,355 +82,300 @@ frappe.db.set_value("Customer", "CUST-001", {
     "status": "Active",
     "last_contact": frappe.utils.today()
 })
-
-# ⚠️ IMPORTANT: set_value saves directly, bypasses validation!
+# WARNING: set_value bypasses validate hooks — use only for simple updates
 ```
 
-### Get multiple records
+### Multiple Records
 
 ```python
-# get_all(doctype, filters, fields, ...)
+# get_all — NO permission filtering
 orders = frappe.get_all("Sales Order",
     filters={"customer": "CUST-001", "docstatus": 1},
-    fields=["name", "grand_total", "transaction_date"],
-    order_by="transaction_date desc",
-    limit=10
+    fields=["name", "grand_total", "status"],
+    order_by="creation desc",
+    limit=20
 )
-# Returns: [{"name": "...", "grand_total": ...}, ...]
+# Returns: [{"name": "SO-001", "grand_total": 5000, "status": "Submitted"}, ...]
+
+# get_list — WITH permission filtering (respects user permissions)
+orders = frappe.db.get_list("Sales Order",
+    filters={"docstatus": 1},
+    fields=["name", "grand_total"],
+    limit=20
+)
 
 # Filter operators
 filters = {
-    "grand_total": [">", 1000],           # Greater than
-    "status": ["in", ["Open", "Active"]], # In list
-    "due_date": ["<", frappe.utils.today()], # Less than
-    "name": ["like", "SO-%"],             # Pattern match
-    "customer": ["is", "set"]             # Is not null
+    "grand_total": [">", 1000],
+    "status": ["in", ["Open", "Active"]],
+    "due_date": ["<", frappe.utils.today()],
+    "name": ["like", "SO-%"],
+    "customer": ["is", "set"],           # IS NOT NULL
+    "note": ["is", "not set"],           # IS NULL
+    "creation": ["between", [start, end]]
 }
+
+# pluck — returns flat list of one field
+names = frappe.get_all("Customer", filters={...}, pluck="name")
+# Returns: ["CUST-001", "CUST-002", ...]
 ```
 
-### Count
+### Count / Exists
 
 ```python
-count = frappe.db.count("Sales Invoice", 
-    filters={"status": "Unpaid", "customer": doc.customer})
-```
+count = frappe.db.count("Sales Invoice",
+    filters={"status": "Unpaid", "docstatus": 1})
 
-### Exists check
-
-```python
 if frappe.db.exists("Customer", "CUST-001"):
-    # Customer exists
-    pass
+    pass  # Document exists
 
-# With filters
 if frappe.db.exists("Sales Order", {"customer": doc.customer, "docstatus": 0}):
-    # Draft order exists
-    pass
+    pass  # Matching document exists
 ```
 
-### Raw SQL (use carefully!)
+### Raw SQL
 
 ```python
-# ALWAYS use parameterized queries!
+# ALWAYS use parameterized queries
 results = frappe.db.sql("""
-    SELECT name, grand_total 
+    SELECT name, grand_total
     FROM `tabSales Invoice`
-    WHERE customer = %(customer)s
-    AND docstatus = 1
+    WHERE customer = %(customer)s AND docstatus = 1
 """, {"customer": doc.customer}, as_dict=True)
 
-# ❌ NEVER use string formatting:
-# frappe.db.sql(f"SELECT * FROM tab WHERE name = '{user_input}'")  # SQL INJECTION!
+# NEVER use f-strings or string concatenation in SQL:
+# frappe.db.sql(f"... WHERE name = '{user_input}'")  ← SQL INJECTION
 ```
 
-### Commit / Rollback
+### Query Builder (frappe.qb)
 
 ```python
-# After bulk operations in Scheduler scripts
-frappe.db.commit()
+SI = frappe.qb.DocType("Sales Invoice")
+query = (
+    frappe.qb.from_(SI)
+    .select(SI.name, SI.grand_total)
+    .where(SI.customer == "CUST-001")
+    .where(SI.docstatus == 1)
+    .orderby(SI.creation, order=frappe.qb.desc)
+    .limit(10)
+)
+results = query.run(as_dict=True)
+```
 
-# On errors
-frappe.db.rollback()
+### Transaction Control
 
-# ⚠️ In Document Event scripts: framework handles commit/rollback
+```python
+frappe.db.commit()    # ONLY in Scheduler scripts — NEVER in Document Events
+frappe.db.rollback()  # ONLY in Scheduler scripts — NEVER in Document Events
+frappe.db.escape(val) # Escape value for SQL WHERE clause
 ```
 
 ---
 
 ## frappe Document Methods
 
-### Fetch document
-
 ```python
-# Full document with all fields
+# Fetch existing document
 customer = frappe.get_doc("Customer", "CUST-001")
-customer.customer_name
-customer.save()
+customer.customer_name   # Read field
+customer.save()          # Save changes (triggers hooks)
 
-# New document
-new_todo = frappe.get_doc({
+# Cached fetch (faster, read-only — NEVER modify and save)
+customer = frappe.get_cached_doc("Customer", "CUST-001")
+
+# Create new document (method 1)
+todo = frappe.get_doc({
     "doctype": "ToDo",
     "description": "Follow up",
     "reference_type": doc.doctype,
     "reference_name": doc.name
 })
-new_todo.insert(ignore_permissions=True)
-```
+todo.insert(ignore_permissions=True)
 
-### Cached document (read-only)
+# Create new document (method 2)
+todo = frappe.new_doc("ToDo")
+todo.description = "Follow up"
+todo.insert()
 
-```python
-# Faster for frequently accessed data
-customer = frappe.get_cached_doc("Customer", "CUST-001")
-# ⚠️ Changes will NOT be saved!
-```
+# Get most recent document
+last = frappe.get_last_doc("Sales Order",
+    filters={"customer": doc.customer})
 
-### Create new document
+# Delete document
+frappe.delete_doc("ToDo", "TODO-001")
 
-```python
-# Via get_doc
-new_doc = frappe.get_doc({
-    "doctype": "Sales Invoice",
-    "customer": doc.customer,
-    "items": [{
-        "item_code": "ITEM-001",
-        "qty": 1
-    }]
-})
-new_doc.insert()
+# Rename document
+frappe.rename_doc("Customer", "Old Name", "New Name")
 
-# Via new_doc helper
-new_doc = frappe.new_doc("Sales Invoice")
-new_doc.customer = doc.customer
-new_doc.append("items", {
-    "item_code": "ITEM-001",
-    "qty": 1
-})
-new_doc.insert()
+# Get DocType metadata
+meta = frappe.get_meta("Sales Invoice")
+meta.get_field("grand_total")  # Field metadata
 ```
 
 ---
 
-## frappe.utils - Utilities
+## frappe.utils — Utilities
 
-### Date functions
+### Date / Time
 
 ```python
-# Current date/time
-frappe.utils.today()              # "2024-01-15" (string)
-frappe.utils.now()                # "2024-01-15 10:30:00" (string)
-frappe.utils.now_datetime()       # datetime object
-frappe.utils.nowdate()            # Same as today()
-frappe.utils.nowtime()            # "10:30:00"
+frappe.utils.today()                    # "2024-01-15"
+frappe.utils.nowdate()                  # Same as today()
+frappe.utils.now()                      # "2024-01-15 10:30:00"
+frappe.utils.now_datetime()             # datetime object
+frappe.utils.nowtime()                  # "10:30:00"
 
-# Date calculations
 frappe.utils.add_days(date, 7)          # +7 days
 frappe.utils.add_months(date, 1)        # +1 month
 frappe.utils.add_years(date, 1)         # +1 year
-frappe.utils.date_diff(date1, date2)    # Difference in days
+frappe.utils.date_diff(date1, date2)    # Days between (int)
 frappe.utils.get_first_day(date)        # First day of month
 frappe.utils.get_last_day(date)         # Last day of month
+frappe.utils.getdate(string)            # String → date object
+frappe.utils.get_datetime(string)       # String → datetime object
 
-# Formatting
 frappe.utils.formatdate(date, "dd-MM-yyyy")
 frappe.utils.format_datetime(datetime)
+frappe.format_date(date)                # Human-readable date
+frappe.date_format                      # System date format string
 ```
 
-### Number functions
+### Number / String
 
 ```python
-frappe.utils.flt(value)           # To float, None → 0.0
-frappe.utils.cint(value)          # To int, None → 0
-frappe.utils.cstr(value)          # To string, None → ""
+frappe.utils.flt(value)                 # → float (None → 0.0)
+frappe.utils.flt(value, precision=2)    # With decimal precision
+frappe.utils.cint(value)                # → int (None → 0)
+frappe.utils.cstr(value)                # → str (None → "")
+frappe.utils.rounded(123.456, 2)        # → 123.46
+frappe.utils.fmt_money(1234.56, currency="EUR")
 
-# Round to precision
-frappe.utils.rounded(123.456, 2)  # 123.46
-
-# Formatting
-frappe.utils.fmt_money(1234.56, currency="EUR")  # "€ 1,234.56"
+frappe.utils.strip_html(html)           # Remove HTML tags
+frappe.utils.escape_html(text)          # Escape HTML entities
+frappe.utils.random_string(8)           # Random alphanumeric string
+frappe.utils.get_url()                  # Site base URL
+frappe.utils.get_fullname(user)         # User's full name
 ```
 
-### String functions
+### JSON (Instead of import json)
 
 ```python
-frappe.utils.cstr(value)          # Safe string conversion
-frappe.utils.strip_html(html)     # Remove HTML tags
-frappe.utils.escape_html(text)    # Escape HTML entities
-```
-
-### JSON (instead of import json)
-
-```python
-# Parsing
-data = frappe.parse_json(json_string)
-
-# Serializing
-json_string = frappe.as_json(dict_or_list)
-```
-
-### Other utilities
-
-```python
-frappe.utils.get_url()            # Site URL
-frappe.utils.random_string(8)     # Random string
-frappe.utils.get_fullname(user)   # User's full name
+data = frappe.parse_json(json_string)   # JSON string → Python dict/list
+text = frappe.as_json(python_obj)       # Python dict/list → JSON string
 ```
 
 ---
 
-## frappe Messaging
-
-### Throw error (stops execution)
+## Messaging / Errors
 
 ```python
-# Validation error - shows message to user
-frappe.throw("This field is required")
-
-# With title
-frappe.throw("Amount too high", title="Validation Error")
-
-# With error type
+# Stop execution and show error to user
+frappe.throw("Amount cannot be negative")
 frappe.throw("Access denied", frappe.PermissionError)
-```
+frappe.throw("Invalid amount", title="Validation Error")
 
-### Information messages
+# Show notification (does NOT stop execution)
+frappe.msgprint("Record updated successfully")
+frappe.msgprint(msg="Created", title="Success", indicator="green")
 
-```python
-# Desktop notification
-frappe.msgprint("Operation completed")
-
-# With options
-frappe.msgprint(
-    msg="Record created",
-    title="Success",
-    indicator="green"  # green, blue, orange, red
-)
-```
-
-### Logging
-
-```python
-# Error log (visible in Error Log list)
-frappe.log_error(
-    message="Error details",
-    title="API Call Failed"
-)
-
-# With traceback
-try:
-    risky_operation()
-except Exception:
-    frappe.log_error(frappe.get_traceback(), "Operation failed")
+# Log to Error Log list (background — no user notification)
+frappe.log_error(message="Details here", title="Sync Failed")
+frappe.log_error(frappe.get_traceback(), "Unhandled Error")
 ```
 
 ---
 
-## frappe.session
-
-### Current user info
+## HTTP Requests (Available in Sandbox)
 
 ```python
-frappe.session.user              # "user@example.com" or "Guest"
-frappe.session.sid               # Session ID
+# GET request
+response = frappe.make_get_request(
+    "https://api.example.com/data",
+    params={"key": "value"},
+    headers={"Authorization": "Bearer token"}
+)
 
-# User roles
-frappe.get_roles()               # ["System Manager", "Sales User", ...]
-frappe.get_roles("user@email")   # Roles of specific user
+# POST request
+response = frappe.make_post_request(
+    "https://api.example.com/submit",
+    data={"field": "value"},
+    headers={"Content-Type": "application/json"}
+)
 
-# Check specific role
-if "Sales Manager" in frappe.get_roles():
-    # Has role
-    pass
+# PUT request
+response = frappe.make_put_request(
+    "https://api.example.com/update/1",
+    data={"field": "new_value"}
+)
 ```
 
-### Permissions
+---
+
+## Email
 
 ```python
-# Check permission
-if frappe.has_permission("Sales Invoice", "write"):
-    # Can write
-    pass
+frappe.sendmail(
+    recipients=["user@example.com"],
+    sender="noreply@example.com",
+    subject="Invoice Overdue",
+    message="Your invoice SI-001 is overdue."
+)
+```
 
-# Check for specific document
-if frappe.has_permission("Sales Invoice", "write", doc.name):
-    pass
+---
 
+## Session / Permissions
+
+```python
+frappe.session.user                     # "user@example.com" or "Guest"
+frappe.session.csrf_token               # CSRF token
+frappe.user                             # Same as frappe.session.user
+frappe.full_name                        # Current user's full name
+
+frappe.get_roles()                      # Current user's roles
+frappe.get_roles("user@email.com")      # Specific user's roles
+frappe.get_fullname()                   # Current user's full name
+frappe.get_fullname("user@email.com")   # Specific user's full name
+frappe.get_gravatar()                   # User avatar URL
+
+frappe.has_permission("Sales Invoice", "read")
+frappe.has_permission("Sales Invoice", "write", "SINV-001")
 # Permission types: read, write, create, delete, submit, cancel, amend
 ```
 
 ---
 
-## API Script Specific
-
-In API type Server Scripts:
-
-### Request data
+## Miscellaneous
 
 ```python
-# Query parameters and POST data
-customer = frappe.form_dict.get("customer")
-data = frappe.form_dict.get("data")
+# Translation
+_("Translatable string")
 
-# Safe retrieval
-limit = frappe.form_dict.get("limit", 10)  # With default
-```
+# Template rendering
+html = frappe.render_template("Hello {{ name }}", {"name": "World"})
 
-### Response
+# Call another Server Script as a library (v13+)
+result = run_script("My Library Script", arg1="value1")
 
-```python
-# Simple response
-frappe.response["message"] = {"status": "success", "data": result}
+# Read hooks from apps
+hooks = frappe.get_hooks("doc_events")
 
-# Or direct return (only in API scripts)
-# The return value automatically becomes frappe.response["message"]
-```
+# Format value by field type
+frappe.format_value(1234.5, {"fieldtype": "Currency"})
 
-### Request context
-
-```python
-frappe.request               # Werkzeug request object
-frappe.request.method        # "GET", "POST", etc.
-frappe.request.headers       # Request headers
+# System settings
+settings = frappe.get_system_settings()
 ```
 
 ---
 
-## Python Builtins
+## What is BLOCKED
 
-### Available
-
-```python
-# Basic types
-str, int, float, bool, list, dict, tuple, set
-
-# Iteration
-range, enumerate, zip, map, filter
-
-# Aggregation  
-sum, min, max, len, sorted, reversed
-
-# Type checks
-isinstance, type
-
-# Logic
-all, any
-
-# Other
-print  # Goes to server log
-```
-
-### NOT available
-
-```python
-# File I/O
-open, file
-
-# Code execution
-eval, exec, compile
-
-# System access
-__import__  # So all imports
-globals, locals, vars
-
-# All modules (os, sys, subprocess, etc.)
-```
+| Category | Examples | Error |
+|---|---|---|
+| All imports | `import json`, `from datetime import date` | `ImportError: __import__ not found` |
+| File I/O | `open()`, `file()` | `NameError` |
+| Code execution | `eval()`, `exec()`, `compile()` | Blocked by sandbox |
+| OS access | `os.system()`, `subprocess.run()` | Not available |
+| Scope introspection | `globals()`, `locals()`, `vars()` | Blocked |
+| Module access | `__import__`, `importlib` | Blocked |

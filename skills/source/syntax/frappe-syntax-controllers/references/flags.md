@@ -1,14 +1,17 @@
-# Flags Systeem Reference
+# Flags System Reference
 
-> Complete documentatie van het Frappe flags systeem voor behaviour override en inter-event communicatie.
+Complete reference for the Frappe flags system used in Document Controllers.
 
 ---
 
-## Overzicht
+## Two Levels of Flags
 
-Frappe heeft twee niveaus van flags:
-1. **Document flags** (`doc.flags`) - Per document instance
-2. **Request flags** (`frappe.flags`) - Globaal voor huidige request
+| Level | Access | Scope | Lifetime |
+|---|---|---|---|
+| Document flags | `doc.flags` | Single document instance | Current request |
+| Request flags | `frappe.flags` | Global for entire request | Current request |
+
+NEVER rely on flags persisting between requests. Flags are temporary, in-memory only.
 
 ---
 
@@ -17,69 +20,32 @@ Frappe heeft twee niveaus van flags:
 ### Permission Bypass Flags
 
 ```python
-# Bypass alle permission checks
-doc.flags.ignore_permissions = True
-doc.save()  # Geen permission check
-
-# Voorbeeld: Systeem update zonder user permissions
-doc = frappe.get_doc("Sales Order", "SO-00001")
-doc.flags.ignore_permissions = True
-doc.status = "Closed"
-doc.save()
+doc.flags.ignore_permissions = True   # Bypass all permission checks
+doc.flags.ignore_validate = True      # Skip validate() method
+doc.flags.ignore_mandatory = True     # Skip mandatory field checks
+doc.flags.ignore_links = True         # Skip link field validation
+doc.flags.ignore_version = True       # Skip version record creation
 ```
 
-### Validation Bypass Flags
+### Notification Flags
 
 ```python
-# Skip validate() method
-doc.flags.ignore_validate = True
-
-# Skip verplichte veld checks
-doc.flags.ignore_mandatory = True
-
-# Skip link validatie (linked docs bestaan check)
-doc.flags.ignore_links = True
-
-# Combinatie voor bulk import
-doc.flags.ignore_validate = True
-doc.flags.ignore_mandatory = True
-doc.flags.ignore_links = True
-doc.insert()
+doc.flags.notify_update = False   # [v15+] Suppress realtime browser update
 ```
 
-### Versioning Flags
+### Passing Flags via insert/save
 
 ```python
-# Maak geen version record aan
-doc.flags.ignore_version = True
-doc.save()  # Geen audit trail voor deze save
-```
-
-### Notification Flags (v15)
-
-```python
-# Stuur geen realtime update naar browser
-doc.flags.notify_update = False
-doc.save()  # Browser refresht niet automatisch
-```
-
----
-
-## Flags via insert() en save()
-
-```python
-# Insert met flags als parameters
 doc.insert(
-    ignore_permissions=True,      # Bypass write permissions
-    ignore_links=True,            # Bypass link validatie
-    ignore_if_duplicate=True,     # Geen error bij duplicate
-    ignore_mandatory=True         # Bypass verplichte velden
+    ignore_permissions=True,
+    ignore_links=True,
+    ignore_if_duplicate=True,
+    ignore_mandatory=True
 )
 
-# Save met flags
 doc.save(
-    ignore_permissions=True,      # Bypass write permissions
-    ignore_version=True           # Geen version record
+    ignore_permissions=True,
+    ignore_version=True
 )
 ```
 
@@ -87,263 +53,196 @@ doc.save(
 
 ## Request Flags (frappe.flags)
 
-### Systeem Status Flags
+### System State Flags
 
 ```python
-# Check of we in import modus zijn
 if frappe.flags.in_import:
-    # Skip heavy validaties tijdens import
-    return
+    return  # Skip heavy validation during data import
 
-# Check of we in installatie modus zijn
 if frappe.flags.in_install:
-    # Skip validaties tijdens app installatie
-    return
+    return  # Skip validation during app installation
 
-# Check of we in patch/migrate modus zijn
 if frappe.flags.in_patch:
-    # Skip bepaalde checks tijdens migratie
-    return
+    return  # Skip checks during migration/patch
 
 if frappe.flags.in_migrate:
-    # Skip bepaalde checks tijdens migratie
-    return
+    return  # Skip checks during bench migrate
+
+if frappe.flags.in_scheduler:
+    pass  # Running in background scheduler job
 ```
 
 ### Email Control
 
 ```python
-# Onderdruk alle email versturen
+# Suppress ALL emails for current request
 frappe.flags.mute_emails = True
-# Alle emails in deze request worden NIET verstuurd
-
-# Voorbeeld: Bulk operatie zonder email spam
-frappe.flags.mute_emails = True
-for order_name in order_names:
-    doc = frappe.get_doc("Sales Order", order_name)
-    doc.submit()  # Geen notification emails
+for order in orders:
+    frappe.get_doc("Sales Order", order).submit()  # No notification emails
 frappe.flags.mute_emails = False
-```
-
-### Scheduler Flag
-
-```python
-# Check of code draait in scheduler job
-if frappe.flags.in_scheduler:
-    # Pas gedrag aan voor background execution
-    pass
 ```
 
 ---
 
-## Custom Flags voor Inter-Event Communicatie
+## Custom Flags for Inter-Hook Communication
 
-Gebruik `doc.flags` om informatie door te geven tussen hooks.
-
-### Patroon: Status Change Tracking
+### Pattern: Status Change Tracking
 
 ```python
 class SalesInvoice(Document):
     def validate(self):
-        old_doc = self.get_doc_before_save()
-        if old_doc and old_doc.status != self.status:
+        old = self.get_doc_before_save()
+        if old and old.status != self.status:
             self.flags.status_changed = True
-            self.flags.old_status = old_doc.status
-    
+            self.flags.old_status = old.status
+
     def on_update(self):
-        if self.flags.get('status_changed'):
-            self.log_status_change(
-                from_status=self.flags.old_status,
-                to_status=self.status
-            )
+        if self.flags.get("status_changed"):
+            self.log_status_change(self.flags.old_status, self.status)
 ```
 
-### Patroon: High Value Detection
-
-```python
-class SalesOrder(Document):
-    def validate(self):
-        if self.grand_total > 10000:
-            self.flags.high_value = True
-    
-    def on_submit(self):
-        if self.flags.get('high_value'):
-            self.notify_finance_team()
-            self.request_manager_approval()
-```
-
-### Patroon: Skip Recursive Calls
+### Pattern: Recursion Prevention
 
 ```python
 class Task(Document):
     def on_update(self):
-        # Voorkom infinite loop bij linked updates
-        if self.flags.get('updating_from_project'):
-            return
-        
+        if self.flags.get("updating_from_project"):
+            return  # Prevent infinite loop
+
         project = frappe.get_doc("Project", self.project)
         project.flags.updating_from_task = True
         project.update_percent_complete()
         project.save()
 ```
 
-### Patroon: Trigger Source Tracking
+### Pattern: Trigger Source Tracking
 
 ```python
 class StockEntry(Document):
     def on_submit(self):
-        if self.flags.get('from_purchase_receipt'):
-            # Dit is getriggerd door Purchase Receipt
-            self.add_comment('Info', 'Auto-created from Purchase Receipt')
-        elif self.flags.get('from_sales_order'):
-            # Dit is getriggerd door Sales Order
-            pass
+        if self.flags.get("from_purchase_receipt"):
+            self.add_comment("Info", "Auto-created from Purchase Receipt")
 
-# Aanroep van buiten:
+# Called from another controller:
 stock_entry.flags.from_purchase_receipt = True
 stock_entry.submit()
 ```
 
----
-
-## Flags Best Practices
-
-### âœ… DO: Gebruik flags voor tijdelijke state
+### Pattern: Conditional Notifications
 
 ```python
+class SalesOrder(Document):
+    def validate(self):
+        if self.grand_total > 10000:
+            self.flags.high_value = True
+
+    def on_submit(self):
+        if self.flags.get("high_value"):
+            self.notify_finance_team()
+```
+
+---
+
+## Flag Best Practices
+
+### ALWAYS check flags safely with get()
+
+```python
+# CORRECT - returns None if flag not set
+if self.flags.get("high_value"):
+    pass
+
+# CORRECT - with default value
+if self.flags.get("retry_count", 0) > 3:
+    pass
+
+# WRONG - raises AttributeError if not set
+if self.flags.high_value:  # Risky!
+    pass
+```
+
+### NEVER persist flags to database
+
+```python
+# WRONG - flags are temporary, not for storage
 def validate(self):
-    # Goed: flag wordt automatisch opgeruimd na request
-    self.flags.needs_notification = self.should_notify()
+    self.some_db_field = self.flags.get("temp_value")
+
+# CORRECT - flags communicate between hooks in same request only
+def validate(self):
+    self.flags.temp_value = compute_something()
 
 def on_update(self):
-    if self.flags.get('needs_notification'):
-        self.send_notification()
+    if self.flags.get("temp_value"):
+        do_something()
 ```
 
-### âœ… DO: Check flags veilig met get()
+### NEVER depend on flags between requests
 
 ```python
-# Goed: retourneert None als flag niet bestaat
-if self.flags.get('high_value'):
-    pass
-
-# Ook goed: met default
-if self.flags.get('retry_count', 0) > 3:
-    pass
-```
-
-### âŒ DON'T: Persisteer flags in database
-
-```python
-# Fout: flags zijn tijdelijk, niet voor opslag
-def validate(self):
-    self.custom_flag_field = self.flags.get('some_flag')  # Slaat verkeerde data op
-```
-
-### âŒ DON'T: Afhankelijk van flags tussen requests
-
-```python
-# Fout: flags bestaan alleen tijdens huidige request
-# Deze flag bestaat niet meer bij volgende request
+# WRONG - flag is gone after request ends
 doc.flags.process_later = True
-doc.save()  # Flag is weg na deze request
+doc.save()
+# Next request: doc.flags.process_later is None
 ```
 
 ---
 
-## Flags Reference Tabel
+## Complete Flag Reference
 
 ### doc.flags (Document Level)
 
 | Flag | Type | Effect |
-|------|------|--------|
+|---|---|---|
 | `ignore_permissions` | bool | Bypass permission checks |
 | `ignore_validate` | bool | Skip validate() method |
-| `ignore_mandatory` | bool | Skip verplichte veld checks |
-| `ignore_links` | bool | Skip link validatie |
-| `ignore_version` | bool | Geen version record |
-| `notify_update` | bool | (v15) Realtime update aan/uit |
+| `ignore_mandatory` | bool | Skip mandatory field checks |
+| `ignore_links` | bool | Skip link validation |
+| `ignore_version` | bool | Skip version record creation |
+| `notify_update` | bool | [v15+] Control realtime updates |
 
 ### frappe.flags (Request Level)
 
 | Flag | Type | Effect |
-|------|------|--------|
-| `in_import` | bool | Import modus actief |
-| `in_install` | bool | App installatie actief |
-| `in_patch` | bool | Patch execution actief |
-| `in_migrate` | bool | Migratie actief |
-| `in_scheduler` | bool | Background job actief |
-| `mute_emails` | bool | Onderdruk email versturen |
+|---|---|---|
+| `in_import` | bool | Data import active |
+| `in_install` | bool | App installation active |
+| `in_patch` | bool | Patch execution active |
+| `in_migrate` | bool | Migration active |
+| `in_scheduler` | bool | Background scheduler active |
+| `mute_emails` | bool | Suppress all emails |
 
 ---
 
-## Code Voorbeelden
-
-### Bulk Update met Flags
+## Bulk Operations with Flags
 
 ```python
 def bulk_update_status(doc_names, new_status):
-    """Update meerdere documenten zonder validatie en emails."""
+    """Update documents without validation or emails."""
     frappe.flags.mute_emails = True
-    
+
     for name in doc_names:
         doc = frappe.get_doc("Sales Order", name)
         doc.flags.ignore_permissions = True
         doc.flags.ignore_validate = True
         doc.status = new_status
         doc.save()
-    
-    frappe.flags.mute_emails = False
-    frappe.db.commit()
-```
 
-### Import met Volledige Bypass
+    frappe.flags.mute_emails = False
+```
 
 ```python
 def import_legacy_data(records):
-    """Import legacy data met alle checks uitgeschakeld."""
+    """Import with all checks bypassed."""
     frappe.flags.in_import = True
-    
+
     for record in records:
-        doc = frappe.get_doc({
-            "doctype": "Customer",
-            **record
-        })
+        doc = frappe.get_doc({"doctype": "Customer", **record})
         doc.flags.ignore_permissions = True
         doc.flags.ignore_mandatory = True
         doc.flags.ignore_links = True
         doc.flags.ignore_validate = True
         doc.insert()
-    
+
     frappe.flags.in_import = False
-```
-
-### Controller met Custom Flags
-
-```python
-class Project(Document):
-    def validate(self):
-        # Bereken progress
-        self.calculate_progress()
-        
-        # Track of progress significant is gewijzigd
-        old = self.get_doc_before_save()
-        if old and abs(old.percent_complete - self.percent_complete) > 10:
-            self.flags.significant_progress = True
-    
-    def on_update(self):
-        # Notificeer alleen bij significante progress
-        if self.flags.get('significant_progress'):
-            self.notify_stakeholders()
-        
-        # Update tasks als dit niet van task komt
-        if not self.flags.get('from_task'):
-            self.update_task_dates()
-    
-    def update_task_dates(self):
-        for task in frappe.get_all("Task", filters={"project": self.name}):
-            task_doc = frappe.get_doc("Task", task.name)
-            task_doc.flags.from_project = True  # Voorkom recursive
-            task_doc.expected_end_date = self.expected_end_date
-            task_doc.save()
 ```

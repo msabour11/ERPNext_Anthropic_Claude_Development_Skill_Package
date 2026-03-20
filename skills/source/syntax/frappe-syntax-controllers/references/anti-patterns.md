@@ -1,495 +1,282 @@
 # Anti-Patterns Reference
 
-Veelgemaakte fouten bij Document Controllers en correcte alternatieven.
-
-## Inhoudsopgave
-
-1. [Lifecycle Hook Fouten](#lifecycle-hook-fouten)
-2. [Database Operatie Fouten](#database-operatie-fouten)
-3. [Permission en Validatie Fouten](#permission-en-validatie-fouten)
-4. [Performance Anti-Patterns](#performance-anti-patterns)
-5. [Override en Extensie Fouten](#override-en-extensie-fouten)
-6. [Async en Queue Fouten](#async-en-queue-fouten)
+Common controller mistakes and their correct alternatives.
 
 ---
 
-## Lifecycle Hook Fouten
+## Lifecycle Hook Mistakes
 
-### âŒ Wijzigingen na on_update
+### WRONG: Modifying self in on_update
 
-**Probleem**: Wijzigingen aan `self` in `on_update` worden niet opgeslagen.
+Changes to `self` after `on_update` are NOT saved to database.
 
 ```python
-# âŒ FOUT - wijziging verdwijnt
+# WRONG - change is lost
 def on_update(self):
-    self.status = "Completed"  # Wordt NIET opgeslagen in database
-    self.modified_by = frappe.session.user  # Verloren!
-```
+    self.status = "Completed"  # NOT saved
 
-**Waarom**: `on_update` draait NA de database operatie. Het document is al opgeslagen.
-
-```python
-# âœ… GOED - gebruik db_set voor post-save wijzigingen
+# CORRECT - use db_set for post-save changes
 def on_update(self):
-    frappe.db.set_value(self.doctype, self.name, "status", "Completed")
-    # Of meerdere velden:
-    frappe.db.set_value(self.doctype, self.name, {
-        "status": "Completed",
-        "completed_at": frappe.utils.now()
-    })
-```
+    self.db_set("status", "Completed")
+    # Or for multiple fields:
+    self.db_set({"status": "Completed", "completed_at": frappe.utils.now()})
 
-```python
-# âœ… GOED - alternatief: doe berekeningen in validate
+# CORRECT - move calculation to validate (changes ARE saved)
 def validate(self):
     if self.all_items_delivered():
-        self.status = "Completed"  # Dit wordt WEL opgeslagen
+        self.status = "Completed"
 ```
 
----
-
-### âŒ Recursive Save
-
-**Probleem**: `save()` aanroepen in `on_update` veroorzaakt infinite loop.
+### WRONG: Calling save() in on_update (infinite loop)
 
 ```python
-# âŒ FOUT - infinite loop
+# WRONG - infinite recursion: on_update -> save -> on_update -> ...
 def on_update(self):
     self.counter = (self.counter or 0) + 1
-    self.save()  # Triggert on_update â†’ save() â†’ on_update â†’ ...
-```
+    self.save()
 
-```python
-# âœ… GOED - gebruik db_set (triggert GEEN hooks)
+# CORRECT - use db_set (no hooks triggered)
 def on_update(self):
     new_count = (self.counter or 0) + 1
-    frappe.db.set_value(
-        self.doctype, self.name, 
-        "counter", new_count, 
-        update_modified=False  # Voorkom modified timestamp update
-    )
-```
+    self.db_set("counter", new_count, update_modified=False)
 
-```python
-# âœ… GOED - gebruik flag om herhaalde save te voorkomen
+# CORRECT - use flag to prevent recursion
 def on_update(self):
-    if self.flags.get('in_recursive_update'):
+    if self.flags.get("in_recursive_update"):
         return
-    
     self.flags.in_recursive_update = True
-    # ... andere operaties ...
+    # ... operations ...
 ```
 
----
-
-### âŒ Verkeerde Hook voor Validatie
-
-**Probleem**: Validatie in `on_update` kan geen fout meer gooien.
+### WRONG: Validation in on_update
 
 ```python
-# âŒ FOUT - te laat voor validatie
+# WRONG - document already saved when this throws
 def on_update(self):
     if self.grand_total < 0:
-        frappe.throw("Invalid total")  # Document is al opgeslagen!
-```
+        frappe.throw("Invalid total")  # Data already in DB!
 
-**Waarom**: Als je in `on_update` een error gooit, is het document al opgeslagen. De fout wordt wel getoond, maar de data staat in de database.
-
-```python
-# âœ… GOED - valideer in validate hook
+# CORRECT - validate BEFORE save
 def validate(self):
     if self.grand_total < 0:
-        frappe.throw("Invalid total")  # Blokkeert save
+        frappe.throw("Invalid total")  # Blocks save entirely
 ```
 
----
-
-### âŒ after_insert vs on_update Verwarring
-
-**Probleem**: `after_insert` wordt alleen bij INSERT aangeroepen, niet bij UPDATE.
+### WRONG: Using after_insert for all-save logic
 
 ```python
-# âŒ FOUT - draait alleen bij creatie
+# WRONG - only runs on first save, never on updates
 def after_insert(self):
-    self.send_notification()  # Nooit bij updates!
-```
+    self.send_notification()  # Never triggers on update!
 
-```python
-# âœ… GOED - gebruik on_update voor alle saves
+# CORRECT - use on_update for all saves, check if needed
 def on_update(self):
-    if self.is_new():  # Check of het een nieuw document is
+    if self.is_new():
         self.send_welcome_notification()
     else:
         self.send_update_notification()
 ```
 
-```python
-# âœ… GOED - gebruik get_doc_before_save
-def on_update(self):
-    old = self.get_doc_before_save()
-    if old is None:
-        # Dit is een nieuw document
-        self.send_welcome_notification()
-```
-
 ---
 
-## Database Operatie Fouten
+## Database Mistakes
 
-### âŒ Commit in Controllers
-
-**Probleem**: Handmatige commits verstoren Frappe's transaction management.
+### WRONG: Calling frappe.db.commit() in controllers
 
 ```python
-# âŒ FOUT - verstoor transaction
+# WRONG - breaks transaction management
 def on_update(self):
     frappe.db.sql("UPDATE tabItem SET ...")
-    frappe.db.commit()  # NIET DOEN
-```
+    frappe.db.commit()  # Can cause partial updates on error
 
-**Waarom**: Frappe handelt commits automatisch af aan het einde van een request. Tussentijdse commits kunnen partial updates veroorzaken bij errors.
-
-```python
-# âœ… GOED - laat Frappe commits afhandelen
+# CORRECT - Frappe commits automatically at end of request
 def on_update(self):
     frappe.db.sql("UPDATE tabItem SET ...")
-    # Geen commit nodig - Frappe doet dit automatisch
+    # No commit needed
 ```
 
----
-
-### âŒ db_insert/db_update Misbruik
-
-**Probleem**: `db_insert()` en `db_update()` bypass alle validatie.
+### WRONG: Using db_insert/db_update for normal operations
 
 ```python
-# âŒ FOUT - bypass alle hooks en validatie
-def create_related_doc(self):
-    doc = frappe.get_doc({"doctype": "Task", "title": "New Task"})
-    doc.db_insert()  # Geen validate, geen permissions check
+# WRONG - bypasses ALL hooks and validation
+def create_related(self):
+    doc = frappe.get_doc({"doctype": "Task", "title": "New"})
+    doc.db_insert()  # No validate, no permissions
+
+# CORRECT - use insert() for normal operations
+def create_related(self):
+    doc = frappe.get_doc({"doctype": "Task", "title": "New"})
+    doc.insert()  # All hooks and validation run
 ```
 
-```python
-# âœ… GOED - gebruik insert() of save()
-def create_related_doc(self):
-    doc = frappe.get_doc({"doctype": "Task", "title": "New Task"})
-    doc.insert()  # Alle hooks worden uitgevoerd
-```
-
-**Uitzondering**: `db_insert()`/`db_update()` alleen gebruiken voor bulk operaties met bewuste bypass:
+### WRONG: SQL injection via string formatting
 
 ```python
-# âœ… ACCEPTABEL - bulk import met bewuste bypass
-def bulk_import_items(items):
-    for item_data in items:
-        doc = frappe.get_doc({"doctype": "Item", **item_data})
-        doc.flags.ignore_permissions = True
-        doc.flags.ignore_validate = True
-        doc.db_insert()  # Sneller voor bulk, maar wees bewust van risico's
-```
-
----
-
-### âŒ SQL Injection Risico
-
-**Probleem**: User input direct in SQL queries.
-
-```python
-# âŒ FOUT - SQL injection mogelijk
+# WRONG - SQL injection vulnerability
 def get_items(self):
-    return frappe.db.sql(f"""
-        SELECT * FROM tabItem WHERE name = '{self.item_code}'
-    """)
-```
+    return frappe.db.sql(f"SELECT * FROM tabItem WHERE name = '{self.item_code}'")
 
-```python
-# âœ… GOED - gebruik parameterized queries
+# CORRECT - parameterized query
 def get_items(self):
-    return frappe.db.sql("""
-        SELECT * FROM tabItem WHERE name = %s
-    """, [self.item_code])
-```
+    return frappe.db.sql("SELECT * FROM tabItem WHERE name = %s", [self.item_code])
 
-```python
-# âœ… GOED - gebruik frappe.db.get_all
+# CORRECT - use ORM
 def get_items(self):
     return frappe.get_all("Item", filters={"name": self.item_code})
 ```
 
 ---
 
-## Permission en Validatie Fouten
+## Permission Mistakes
 
-### âŒ Missende Permission Check
-
-**Probleem**: Gevoelige operaties zonder permission check.
+### WRONG: No permission check on whitelisted methods
 
 ```python
-# âŒ FOUT - iedereen kan salaris aanpassen
+# WRONG - anyone can update salary
 @frappe.whitelist()
 def update_salary(employee, new_salary):
     frappe.db.set_value("Employee", employee, "salary", new_salary)
-```
 
-```python
-# âœ… GOED - check permissions
+# CORRECT - check permissions
 @frappe.whitelist()
 def update_salary(employee, new_salary):
     if not frappe.has_permission("Employee", "write"):
-        frappe.throw("Not permitted")
-    
-    # Extra check voor gevoelige velden
-    if not frappe.has_role("HR Manager"):
-        frappe.throw("Only HR Manager can update salary")
-    
+        frappe.throw(_("Not permitted"))
+    if "HR Manager" not in frappe.get_roles():
+        frappe.throw(_("Only HR Manager can update salary"))
     frappe.db.set_value("Employee", employee, "salary", new_salary)
 ```
 
----
-
-### âŒ ignore_permissions Misbruik
-
-**Probleem**: Overal `ignore_permissions=True` gebruiken.
+### WRONG: ignore_permissions everywhere
 
 ```python
-# âŒ FOUT - security bypass overal
+# WRONG - security bypass without justification
 def on_update(self):
     doc = frappe.get_doc("Sales Invoice", self.invoice)
     doc.flags.ignore_permissions = True
-    doc.submit()  # Iedereen kan nu invoices submitten!
-```
+    doc.submit()
 
-```python
-# âœ… GOED - alleen waar nodig, met duidelijke reden
+# CORRECT - only where justified, with documentation
 def on_update(self):
-    # System operation - explicitly bypassing permissions
-    # Reason: This is a background job running as Administrator
-    if frappe.session.user == "Administrator":
-        doc = frappe.get_doc("Sales Invoice", self.invoice)
-        doc.flags.ignore_permissions = True
-        doc.submit()
+    # System operation: auto-submit invoice from approved order
+    # Permission bypass justified: order approval already verified
+    doc = frappe.get_doc("Sales Invoice", self.invoice)
+    doc.flags.ignore_permissions = True
+    doc.submit()
 ```
 
 ---
 
-### âŒ Validatie Alleen aan Client-Side
+## Performance Mistakes
 
-**Probleem**: Alleen JavaScript validatie, geen server validatie.
-
-```python
-# âŒ FOUT - geen server validatie
-class Order(Document):
-    pass  # Vertrouwt volledig op client-side validation
-```
+### WRONG: N+1 query problem
 
 ```python
-# âœ… GOED - altijd server-side validatie
-class Order(Document):
-    def validate(self):
-        # Dupliceer kritieke validaties van client-side
-        if not self.items:
-            frappe.throw(_("Items required"))
-        if self.discount_percent > 50:
-            frappe.throw(_("Discount cannot exceed 50%"))
-```
-
----
-
-## Performance Anti-Patterns
-
-### âŒ N+1 Query Problem
-
-**Probleem**: Database query in loop.
-
-```python
-# âŒ FOUT - N+1 queries
+# WRONG - N database queries in loop
 def validate(self):
-    for item in self.items:  # N items
-        stock = frappe.db.get_value("Bin", 
+    for item in self.items:
+        stock = frappe.db.get_value("Bin",
             {"item_code": item.item_code, "warehouse": item.warehouse},
             "actual_qty"
-        )  # N queries!
-        if item.qty > stock:
-            frappe.throw(f"Insufficient stock for {item.item_code}")
-```
+        )  # 1 query per item!
 
-```python
-# âœ… GOED - batch query
+# CORRECT - batch query
 def validate(self):
-    # Haal alle stock data in Ã©Ã©n query
-    item_warehouse_pairs = [
-        [item.item_code, item.warehouse] for item in self.items
-    ]
-    
+    item_codes = [item.item_code for item in self.items]
     stock_data = frappe.get_all("Bin",
-        filters=[
-            ["item_code", "in", [p[0] for p in item_warehouse_pairs]],
-            ["warehouse", "in", [p[1] for p in item_warehouse_pairs]]
-        ],
+        filters={"item_code": ["in", item_codes]},
         fields=["item_code", "warehouse", "actual_qty"]
     )
-    
-    # Maak lookup dict
-    stock_map = {
-        (d.item_code, d.warehouse): d.actual_qty 
-        for d in stock_data
-    }
-    
+    stock_map = {(d.item_code, d.warehouse): d.actual_qty for d in stock_data}
+
     for item in self.items:
         stock = stock_map.get((item.item_code, item.warehouse), 0)
         if item.qty > stock:
             frappe.throw(f"Insufficient stock for {item.item_code}")
 ```
 
----
-
-### âŒ Heavy Operations in validate
-
-**Probleem**: Langlopende operaties blokkeren de gebruiker.
+### WRONG: Heavy operations in validate
 
 ```python
-# âŒ FOUT - blokkeert UI
+# WRONG - blocks UI for 30+ seconds
 def validate(self):
-    self.generate_100_page_pdf()  # Duurt 30 seconden
-    self.send_emails_to_all_customers()  # 1000 emails
-```
+    self.generate_100_page_pdf()
+    self.send_emails_to_all_customers()
 
-```python
-# âœ… GOED - enqueue zware taken
-def validate(self):
-    # Snelle validatie hier
-    pass
-
+# CORRECT - enqueue heavy tasks
 def on_update(self):
-    # Enqueue langlopende taken
     frappe.enqueue(
-        'myapp.tasks.generate_large_pdf',
-        queue='long',
+        "myapp.tasks.generate_pdf",
+        queue="long",
         doc_name=self.name,
-        enqueue_after_commit=True  # Wacht tot save compleet
-    )
-    
-    frappe.enqueue(
-        'myapp.tasks.send_bulk_emails',
-        queue='long',
-        doc_name=self.name
+        enqueue_after_commit=True
     )
 ```
 
----
-
-### âŒ Ongebruikte Cache
-
-**Probleem**: Herhaaldelijk dezelfde data ophalen.
+### WRONG: Not using cache for repeated lookups
 
 ```python
-# âŒ FOUT - meerdere DB calls voor zelfde data
+# WRONG - multiple DB calls for same record
 def validate(self):
     customer = frappe.get_doc("Customer", self.customer)
-    # ... later in dezelfde method ...
     customer_email = frappe.get_value("Customer", self.customer, "email")
-    customer_credit = frappe.get_value("Customer", self.customer, "credit_limit")
-```
 
-```python
-# âœ… GOED - gebruik caching
+# CORRECT - use cached doc
 def validate(self):
     customer = frappe.get_cached_doc("Customer", self.customer)
     email = customer.email
-    credit = customer.credit_limit
 ```
 
 ---
 
-## Override en Extensie Fouten
+## Override Mistakes
 
-### âŒ Missende super() Aanroep
-
-**Probleem**: Parent functionaliteit wordt overgeslagen.
+### WRONG: Missing super() call
 
 ```python
-# âŒ FOUT - parent validate wordt overgeslagen
+# WRONG - all parent validation skipped
 class CustomSalesInvoice(SalesInvoice):
     def validate(self):
-        self.my_custom_validation()
-        # Parent validate nooit aangeroepen!
-```
+        self.my_check()  # Parent validate never runs!
 
-**Gevolgen**: Alle standaard ERPNext validaties worden overgeslagen.
-
-```python
-# âœ… GOED - altijd super() aanroepen
+# CORRECT - ALWAYS call super()
 class CustomSalesInvoice(SalesInvoice):
     def validate(self):
-        super().validate()  # Eerst parent
-        self.my_custom_validation()
+        super().validate()
+        self.my_check()
 ```
 
-```python
-# âœ… GOED - of parent na custom (afhankelijk van behoefte)
-class CustomSalesInvoice(SalesInvoice):
-    def validate(self):
-        # Pre-processing die voor standard validatie moet
-        self.prepare_data()
-        
-        super().validate()  # Standard validatie
-        
-        # Post-processing
-        self.finalize_data()
-```
-
----
-
-### âŒ doc_events met Verkeerde Signature
-
-**Probleem**: Handler functie met verkeerde parameters.
+### WRONG: doc_events with wrong signature
 
 ```python
-# âŒ FOUT - verkeerde signature
-def on_validate(document):  # Fout: moet 'doc' en optioneel 'method' zijn
+# WRONG - incorrect parameter names
+def on_validate(document):
     pass
-```
 
-```python
-# âœ… GOED - correcte signature
+# CORRECT - use (doc, method=None) signature
 def on_validate(doc, method=None):
-    """
-    Args:
-        doc: Het document object
-        method: Naam van de hook (bijv. 'validate')
-    """
     pass
 ```
 
----
-
-### âŒ Override voor Minor Changes
-
-**Probleem**: Hele controller overriden voor kleine wijziging.
+### WRONG: Full override for minor changes
 
 ```python
-# âŒ OVERKILL - hele controller override voor 1 check
-# hooks.py
+# WRONG - override entire class for one check
 override_doctype_class = {"Sales Invoice": "myapp.override.CustomSI"}
 
-# myapp/override.py (150 regels)
 class CustomSI(SalesInvoice):
     def validate(self):
         super().validate()
         if self.total < 100:
             frappe.msgprint("Small order")
-```
 
-```python
-# âœ… BETER - gebruik doc_events voor kleine toevoegingen
-# hooks.py
+# CORRECT - use doc_events for simple additions
 doc_events = {
     "Sales Invoice": {
         "validate": "myapp.events.si_validate"
     }
 }
 
-# myapp/events.py (10 regels)
 def si_validate(doc, method=None):
     if doc.total < 100:
         frappe.msgprint("Small order")
@@ -497,27 +284,23 @@ def si_validate(doc, method=None):
 
 ---
 
-## Async en Queue Fouten
+## Async Mistakes
 
-### âŒ Enqueue zonder Error Handling
-
-**Probleem**: Background job failures worden niet afgehandeld.
+### WRONG: Enqueue without error handling
 
 ```python
-# âŒ FOUT - geen error handling
+# WRONG - failures are silently lost
 def on_submit(self):
-    frappe.enqueue('myapp.tasks.process', doc_name=self.name)
-```
+    frappe.enqueue("myapp.tasks.process", doc_name=self.name)
 
-```python
-# âœ… GOED - met error handling en retry
+# CORRECT - with error handling and retry
 def on_submit(self):
     frappe.enqueue(
-        'myapp.tasks.process',
+        "myapp.tasks.process",
         doc_name=self.name,
-        queue='short',
+        queue="short",
         timeout=300,
-        retry=3,  # Automatische retry
+        retry=3,
         enqueue_after_commit=True
     )
 
@@ -526,66 +309,41 @@ def process(doc_name):
     try:
         doc = frappe.get_doc("MyDocType", doc_name)
         doc.do_processing()
-    except Exception as e:
-        frappe.log_error(
-            message=f"Processing failed for {doc_name}: {str(e)}",
-            title="Process Error"
-        )
-        raise  # Re-raise voor retry mechanisme
+    except Exception:
+        frappe.log_error(title=f"Process failed: {doc_name}")
+        raise  # Re-raise for retry mechanism
 ```
 
----
-
-### âŒ Synchrone Externe API Calls
-
-**Probleem**: Externe API in validate blokkeert gebruiker.
+### WRONG: Synchronous external API in validate
 
 ```python
-# âŒ FOUT - gebruiker wacht op externe API
+# WRONG - user waits for external API (could be 30+ seconds)
 def validate(self):
-    response = requests.get("https://api.external.com/validate", 
-                           timeout=30)  # Kan 30 sec duren!
-    if not response.ok:
-        frappe.throw("External validation failed")
-```
+    response = requests.get("https://api.external.com/validate", timeout=30)
 
-```python
-# âœ… GOED - async validatie met status tracking
-def validate(self):
-    # Snelle lokale validatie
-    self.status = "Pending External Validation"
-
+# CORRECT - async external call
 def on_update(self):
-    # Async externe validatie
     frappe.enqueue(
-        'myapp.integrations.validate_external',
+        "myapp.integrations.validate_external",
         doc_name=self.name,
-        queue='short'
+        queue="short",
+        enqueue_after_commit=True
     )
-
-# myapp/integrations.py
-def validate_external(doc_name):
-    try:
-        response = requests.get("https://api.external.com/validate")
-        status = "Validated" if response.ok else "Validation Failed"
-    except requests.Timeout:
-        status = "Validation Timeout"
-    
-    frappe.db.set_value("MyDocType", doc_name, "status", status)
 ```
 
 ---
 
-## Samenvatting Best Practices
+## Summary
 
-| Anti-Pattern | Oplossing |
-|--------------|-----------|
-| self.x in on_update | Gebruik `frappe.db.set_value()` |
-| save() in on_update | Gebruik `db_set()` of flags |
-| Validatie in on_update | Verplaats naar `validate` |
-| frappe.db.commit() | Verwijder - Frappe handelt af |
-| Query in loop | Batch query met get_all |
-| Heavy ops in validate | Gebruik `frappe.enqueue()` |
-| Override zonder super() | Altijd `super().method()` aanroepen |
-| ignore_permissions overal | Alleen waar nodig met documentatie |
-| Sync externe API | Async met enqueue |
+| Anti-Pattern | Correct Approach |
+|---|---|
+| `self.x = ...` in on_update | `self.db_set("x", ...)` |
+| `self.save()` in on_update | `self.db_set()` or flags |
+| Validation in on_update | Move to `validate` |
+| `frappe.db.commit()` | Remove -- Frappe handles it |
+| Query in loop | Batch query with `get_all` |
+| Heavy ops in validate | `frappe.enqueue()` |
+| Override without super() | ALWAYS `super().method()` |
+| `ignore_permissions` everywhere | Only where justified |
+| Sync external API in validate | Async with enqueue |
+| f-string in SQL | Parameterized `%s` queries |

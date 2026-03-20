@@ -1,6 +1,17 @@
 # Permission Patterns Reference
 
-Security best practices for Whitelisted Methods.
+Security best practices for whitelisted methods. ALWAYS check permissions inside every whitelisted method.
+
+## Why Permissions Are Required
+
+`@frappe.whitelist()` only verifies the user is **logged in** (or allows guests). It does NOT check:
+- Whether the user can access a specific DocType
+- Whether the user can access a specific document
+- Whether the user has the required role
+
+ALWAYS add explicit permission checks inside the method body.
+
+---
 
 ## frappe.has_permission()
 
@@ -8,56 +19,52 @@ Security best practices for Whitelisted Methods.
 
 ```python
 frappe.has_permission(
-    doctype,           # DocType name
+    doctype,           # DocType name (required)
     ptype="read",      # Permission type: read, write, create, submit, cancel, delete
-    doc=None,          # Optional: specific document or document name
-    user=None,         # Optional: specific user (default: current)
-    throw=False        # If True, throw error instead of return False
+    doc=None,          # Specific document name or Document object (optional)
+    user=None,         # Specific user (default: current session user)
+    throw=False        # True = auto-throw PermissionError instead of returning False
 )
 ```
 
-### Basic Usage
+### DocType-Level Check
 
 ```python
 @frappe.whitelist()
-def get_customer(name):
-    # Check permission for DocType
-    if not frappe.has_permission("Customer", "read"):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
-    
-    return frappe.get_doc("Customer", name).as_dict()
+def get_all_orders():
+    frappe.has_permission("Sales Order", "read", throw=True)
+    return frappe.get_all("Sales Order", limit=20)
 ```
 
 ### Document-Level Check
 
 ```python
 @frappe.whitelist()
-def get_specific_order(order_id):
-    # Check permission for specific document
-    if not frappe.has_permission("Sales Order", "read", order_id):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
-    
-    return frappe.get_doc("Sales Order", order_id).as_dict()
+def get_order(name):
+    frappe.has_permission("Sales Order", "read", name, throw=True)
+    return frappe.get_doc("Sales Order", name).as_dict()
 ```
 
-### With throw=True
+### Manual Check with Custom Message
 
 ```python
 @frappe.whitelist()
-def get_data(doctype, name):
-    # Throws automatically if no permission
-    frappe.has_permission(doctype, "read", name, throw=True)
-    
-    return frappe.get_doc(doctype, name).as_dict()
+def update_order(name, status):
+    if not frappe.has_permission("Sales Order", "write", name):
+        frappe.throw(
+            _("You cannot modify order {0}").format(name),
+            frappe.PermissionError
+        )
+    frappe.db.set_value("Sales Order", name, "status", status)
 ```
 
 ### Permission Types
 
-| Type | Description | When to Use |
-|------|-------------|-------------|
-| `read` | Read document | GET endpoints |
-| `write` | Modify document | PUT/PATCH endpoints |
-| `create` | New document | POST endpoints for new docs |
+| Type | Description | Typical Endpoint |
+|------|-------------|-----------------|
+| `read` | View document | GET endpoints |
+| `write` | Modify document | POST/PUT for updates |
+| `create` | Create new document | POST for creation |
 | `delete` | Delete document | DELETE endpoints |
 | `submit` | Submit document | Submit workflows |
 | `cancel` | Cancel document | Cancel workflows |
@@ -66,7 +73,7 @@ def get_data(doctype, name):
 
 ## frappe.only_for()
 
-Restricts function to specific roles.
+Restricts function to specific roles. Throws `PermissionError` if the user lacks ALL specified roles.
 
 ### Single Role
 
@@ -74,204 +81,152 @@ Restricts function to specific roles.
 @frappe.whitelist()
 def admin_function():
     frappe.only_for("System Manager")
-    # Code only executes if user has System Manager role
     return {"admin_data": "sensitive"}
 ```
 
-### Multiple Roles
+### Multiple Roles (User Needs ANY One)
 
 ```python
 @frappe.whitelist()
-def hr_or_admin_function():
+def hr_or_admin():
     frappe.only_for(["System Manager", "HR Manager"])
-    # Allowed if user has ANY of the roles
-    return {"data": "value"}
+    return {"data": "restricted"}
 ```
 
-### Combined with Permission Check
+### Combined with Document Permission
 
 ```python
 @frappe.whitelist()
 def restricted_update(doctype, name, values):
-    # Role check for function access
-    frappe.only_for("System Manager")
-    
-    # Permission check for specific operation
-    if not frappe.has_permission(doctype, "write", name):
-        frappe.throw(_("Not permitted to write"), frappe.PermissionError)
-    
+    frappe.only_for("System Manager")  # Role gate
+    frappe.has_permission(doctype, "write", name, throw=True)  # Document gate
+
     doc = frappe.get_doc(doctype, name)
-    doc.update(values)
+    doc.update(frappe.parse_json(values) if isinstance(values, str) else values)
     doc.save()
     return doc.as_dict()
 ```
 
 ---
 
-## Permission Error Handling
+## Custom Permission Logic
 
-### Explicit Error Messages
+### Owner-or-Admin Pattern
 
 ```python
 @frappe.whitelist()
-def secure_endpoint(doctype, name, action):
-    try:
-        frappe.has_permission(doctype, action, name, throw=True)
-    except frappe.PermissionError:
-        frappe.throw(
-            _("You don't have permission to {0} this {1}").format(action, doctype),
-            frappe.PermissionError
-        )
-    
+def get_my_document(doctype, name):
     doc = frappe.get_doc(doctype, name)
+
+    is_owner = doc.owner == frappe.session.user
+    is_admin = "System Manager" in frappe.get_roles()
+
+    if not (is_owner or is_admin):
+        frappe.throw(_("Only the owner or admin can access this"), frappe.PermissionError)
+
     return doc.as_dict()
 ```
 
-### Custom Permission Logic
+### Team-Based Access
 
 ```python
 @frappe.whitelist()
-def check_owner_or_admin(doctype, name):
-    doc = frappe.get_doc(doctype, name)
-    
-    # Custom logic: owner of document OR System Manager
-    is_owner = doc.owner == frappe.session.user
-    is_admin = "System Manager" in frappe.get_roles()
-    
-    if not (is_owner or is_admin):
-        frappe.throw(_("Only owner or admin can access"), frappe.PermissionError)
-    
-    return doc.as_dict()
+def get_team_data(team):
+    user = frappe.session.user
+    team_members = frappe.get_all(
+        "Team Member",
+        filters={"parent": team},
+        pluck="user"
+    )
+    if user not in team_members and "System Manager" not in frappe.get_roles():
+        frappe.throw(_("Not a member of this team"), frappe.PermissionError)
+
+    return frappe.get_doc("Team", team).as_dict()
 ```
 
 ---
 
-## Common Patterns
+## Guest Endpoint Permissions
 
-### Read-Only API
-
-```python
-@frappe.whitelist(methods=["GET"])
-def get_dashboard_stats():
-    # Permission check for relevant DocTypes
-    if not frappe.has_permission("Sales Order", "read"):
-        frappe.throw(_("Not permitted"), frappe.PermissionError)
-    
-    return {
-        "total_orders": frappe.db.count("Sales Order"),
-        "pending": frappe.db.count("Sales Order", {"status": "Draft"})
-    }
-```
-
-### Write API with Validation
-
-```python
-@frappe.whitelist(methods=["POST"])
-def create_customer(customer_name, email, territory="All Territories"):
-    # Permission check
-    if not frappe.has_permission("Customer", "create"):
-        frappe.throw(_("Not permitted to create customer"), frappe.PermissionError)
-    
-    # Input validation
-    if not customer_name or not email:
-        frappe.throw(_("Customer name and email required"))
-    
-    doc = frappe.get_doc({
-        "doctype": "Customer",
-        "customer_name": customer_name,
-        "email_id": email,
-        "territory": territory
-    })
-    doc.insert()
-    
-    return {"name": doc.name, "success": True}
-```
-
-### Public API with Limited Data
+For `allow_guest=True` endpoints, permission checks differ:
 
 ```python
 @frappe.whitelist(allow_guest=True, methods=["GET"])
-def get_public_products():
-    """Public endpoint - only return public fields."""
+def get_public_items():
+    """Public endpoint — ONLY return public-safe fields."""
     return frappe.get_all(
         "Item",
         filters={"show_on_website": 1},
         fields=["name", "item_name", "description", "standard_rate"]
-        # NOT: cost_price, supplier, etc.
+        # NEVER include: cost_price, supplier, internal_notes
     )
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def submit_form(name, email, message):
+    """Guest write — ALWAYS use ignore_permissions with fixed DocType."""
+    doc = frappe.get_doc({
+        "doctype": "Web Form Submission",  # Fixed — NEVER from user input
+        "sender_name": frappe.utils.strip_html(name),
+        "email": email,
+        "message": frappe.utils.strip_html(message or "")
+    })
+    doc.insert(ignore_permissions=True)  # Acceptable: fixed DocType + guest context
+    return {"success": True}
 ```
 
 ---
 
-## Security Considerations
+## ignore_permissions Usage
 
-### Avoiding ignore_permissions
+### NEVER Without a Preceding Check
 
 ```python
-# ❌ WRONG - bypasses all security
+# WRONG — anyone can create anything
 @frappe.whitelist()
 def create_anything(data):
     doc = frappe.get_doc(data)
-    doc.insert(ignore_permissions=True)  # SECURITY RISK!
-    return doc.name
-
-# ✅ CORRECT - explicit role check
-@frappe.whitelist()
-def admin_create(data):
-    frappe.only_for("System Manager")  # Only admins
-    
-    # Validate DocType whitelist
-    allowed = ["ToDo", "Note", "Communication"]
-    if data.get("doctype") not in allowed:
-        frappe.throw(_("Invalid Document Type"))
-    
-    doc = frappe.get_doc(data)
-    doc.insert()  # Normal permissions
-    return doc.name
+    doc.insert(ignore_permissions=True)  # SECURITY HOLE
 ```
 
-### When ignore_permissions is Acceptable
+### Acceptable Pattern
 
 ```python
 @frappe.whitelist()
-def create_system_log(message):
-    """System logs must always be creatable."""
-    frappe.only_for("System Manager")  # Role check REQUIRED
-    
+def system_log(message):
+    frappe.only_for("System Manager")  # Role check FIRST
     doc = frappe.get_doc({
-        "doctype": "Error Log",  # Specific, limited DocType
+        "doctype": "Error Log",         # Fixed DocType
         "method": "API Log",
         "error": message
     })
-    doc.insert(ignore_permissions=True)  # Acceptable with role check
+    doc.insert(ignore_permissions=True)  # Acceptable with role check + fixed DocType
+    return doc.name
+```
+
+### With DocType Whitelist
+
+```python
+@frappe.whitelist()
+def create_allowed_doc(data):
+    frappe.only_for("System Manager")
+
+    ALLOWED_DOCTYPES = ["ToDo", "Note", "Communication"]
+    if isinstance(data, str):
+        data = frappe.parse_json(data)
+    if data.get("doctype") not in ALLOWED_DOCTYPES:
+        frappe.throw(_("Cannot create this document type"))
+
+    doc = frappe.get_doc(data)
+    doc.insert()  # Normal permissions — no ignore needed
     return doc.name
 ```
 
 ---
 
-## Permission Implementation Checklist
+## Checklist for Every Whitelisted Method
 
-For each API method:
-
-1. **Determine access level**
-   - Public (allow_guest=True) → Extra input validation
-   - Authenticated → Basic permission check
-   - Role-restricted → frappe.only_for()
-
-2. **Choose correct check method**
-   - DocType level: `frappe.has_permission(doctype, ptype)`
-   - Document level: `frappe.has_permission(doctype, ptype, doc)`
-   - Role level: `frappe.only_for(role)`
-
-3. **Validate input**
-   - Never trust user input
-   - Whitelist allowed values
-   - Sanitize for SQL queries
-
-4. **Limit output**
-   - Only return necessary fields
-   - No internal/sensitive fields
-
-5. **Log suspicious activity**
-   - Failed permission checks
-   - Unusual patterns
+1. **Determine access level**: public, authenticated, or role-restricted
+2. **Choose check method**: `frappe.has_permission()`, `frappe.only_for()`, or custom
+3. **Check BEFORE data access**: NEVER fetch data first, then check permission
+4. **Limit response fields**: NEVER return `doc.as_dict()` with sensitive fields
+5. **Log suspicious activity**: failed permission checks from unexpected users

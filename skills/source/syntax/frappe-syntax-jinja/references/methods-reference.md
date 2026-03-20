@@ -1,98 +1,109 @@
 # Frappe Methods Reference for Jinja
 
-> All available frappe.* methods in Jinja templates (v14/v15).
+> All whitelisted frappe.* methods available in Jinja templates (v14/v15/v16).
 
 ---
 
 ## Formatting Methods
 
-### frappe.format(value, df)
+### doc.get_formatted(fieldname, parent_doc=None)
 
-Formats a raw database value to user-presentable format.
-
-```jinja
-{# Basic usage #}
-{{ frappe.format(doc.posting_date, {'fieldtype': 'Date'}) }}
-{# Output: "09-08-2019" #}
-
-{# Currency formatting #}
-{{ frappe.format(doc.grand_total, {'fieldtype': 'Currency'}) }}
-{# Output: "€ 2,399.00" #}
-
-{# With options #}
-{{ frappe.format(doc.amount, {'fieldtype': 'Currency', 'options': 'currency'}) }}
-```
-
-### frappe.format_date(date)
-
-Formats date to human-readable long format.
-
-```jinja
-{{ frappe.format_date(doc.posting_date) }}
-{# Output: "September 8, 2019" #}
-
-{# v15+ with custom format #}
-{{ frappe.utils.format_date(doc.posting_date, "d MMMM, YYYY") }}
-{# Output: "8 September, 2019" #}
-```
-
-### doc.get_formatted(fieldname, doc=None)
-
-**RECOMMENDED** for field formatting in print formats.
+**RECOMMENDED** — ALWAYS use this for displaying field values in Print Formats.
 
 ```jinja
 {# Parent document fields #}
 {{ doc.get_formatted("posting_date") }}
 {{ doc.get_formatted("grand_total") }}
+{{ doc.get_formatted("status") }}
 
-{# Child table rows - pass parent doc for currency context #}
+{# Child table rows — ALWAYS pass parent doc #}
 {% for row in doc.items %}
     {{ row.get_formatted("rate", doc) }}
     {{ row.get_formatted("amount", doc) }}
 {% endfor %}
 ```
 
+**Why**: `get_formatted()` respects system number format, currency, date format, and field options. Raw field access (`doc.grand_total`) outputs the database value without formatting.
+
+### frappe.format(value, df, doc=None)
+
+Formats a raw value using an explicit field definition.
+
+```jinja
+{{ frappe.format(1234.56, {"fieldtype": "Currency"}) }}
+{# Output: "$ 1,234.56" (depends on system settings) #}
+
+{{ frappe.format("2024-01-15", {"fieldtype": "Date"}) }}
+{# Output: "01-15-2024" (depends on date format setting) #}
+
+{{ frappe.format(value, {"fieldtype": "Currency", "options": "currency"}) }}
+```
+
+### frappe.format_date(date_string)
+
+Formats a date to human-readable long format.
+
+```jinja
+{{ frappe.format_date(doc.posting_date) }}
+{# Output: "January 15, 2024" #}
+
+{# v15+ with custom format string #}
+{{ frappe.utils.format_date(doc.posting_date, "d MMMM, YYYY") }}
+{# Output: "15 January, 2024" #}
+```
+
 ---
 
-## Document Methods
+## Document Retrieval Methods
 
 ### frappe.get_doc(doctype, name)
 
-Retrieves a complete document.
+Retrieves a complete document object. Use ONLY when you need multiple fields.
 
 ```jinja
 {% set customer = frappe.get_doc("Customer", doc.customer) %}
-<p>Credit Limit: {{ frappe.format(customer.credit_limit, {'fieldtype': 'Currency'}) }}</p>
-<p>Territory: {{ customer.territory }}</p>
+<p>{{ customer.customer_name }}</p>
+<p>{{ customer.territory }}</p>
+<p>{{ customer.customer_group }}</p>
 ```
 
-### frappe.get_all(doctype, filters, fields, order_by, limit_page_length)
+**NEVER use `get_doc` when you need only one field** — use `frappe.db.get_value()` instead.
 
-Retrieves list of records (no permission check).
+### frappe.get_all(doctype, filters, fields, order_by, start, page_length, pluck)
+
+Returns list of records. Does NOT check user permissions.
 
 ```jinja
-{% set tasks = frappe.get_all('Task', 
-    filters={'status': 'Open'}, 
-    fields=['title', 'due_date'], 
-    order_by='due_date asc',
-    limit_page_length=10) %}
+{% set tasks = frappe.get_all("Task",
+    filters={"status": "Open"},
+    fields=["title", "due_date"],
+    order_by="due_date asc",
+    page_length=10) %}
 
 {% for task in tasks %}
-<div>
-    <h3>{{ task.title }}</h3>
-    <p>Due: {{ frappe.format_date(task.due_date) }}</p>
-</div>
+    <p>{{ task.title }} — {{ frappe.format_date(task.due_date) }}</p>
 {% endfor %}
 ```
 
-### frappe.get_list(doctype, filters, fields, ...)
+**Parameters**:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `doctype` | String | DocType name |
+| `filters` | Dict | Filter conditions |
+| `fields` | List | Fields to return |
+| `order_by` | String | Sort clause |
+| `start` | Int | Offset for pagination |
+| `page_length` | Int | Limit results |
+| `pluck` | String | Return flat list of single field values |
 
-Similar to `get_all` but filters based on current user's permissions.
+### frappe.get_list(doctype, ...)
+
+Same as `get_all` but respects current user's permissions. ALWAYS use in portal pages.
 
 ```jinja
-{% set my_orders = frappe.get_list('Sales Order',
-    filters={'customer': doc.customer},
-    fields=['name', 'grand_total', 'transaction_date']) %}
+{% set orders = frappe.get_list("Sales Order",
+    filters={"customer": doc.customer},
+    fields=["name", "grand_total", "transaction_date"]) %}
 ```
 
 ---
@@ -101,63 +112,99 @@ Similar to `get_all` but filters based on current user's permissions.
 
 ### frappe.db.get_value(doctype, name, fieldname)
 
-Retrieves specific field value(s).
+Retrieves specific field value(s). ALWAYS prefer over `get_doc` for single fields.
 
 ```jinja
 {# Single value #}
-{% set abbr = frappe.db.get_value('Company', doc.company, 'abbr') %}
-<p>Company: {{ doc.company }} ({{ abbr }})</p>
+{% set abbr = frappe.db.get_value("Company", doc.company, "abbr") %}
+<p>{{ doc.company }} ({{ abbr }})</p>
 
-{# Multiple values #}
-{% set title, description = frappe.db.get_value('Task', 'TASK00002', ['title', 'description']) %}
+{# Multiple values (returns tuple) #}
+{% set name, group = frappe.db.get_value("Customer", doc.customer,
+    ["customer_name", "customer_group"]) %}
 ```
 
 ### frappe.db.get_single_value(doctype, fieldname)
 
-Retrieves value from a Single DocType.
+Retrieves a field value from a Single DocType (e.g., System Settings).
 
 ```jinja
-{% set timezone = frappe.db.get_single_value('System Settings', 'time_zone') %}
-<p>Server timezone: {{ timezone }}</p>
+{% set timezone = frappe.db.get_single_value("System Settings", "time_zone") %}
+{% set country = frappe.db.get_single_value("System Settings", "country") %}
 ```
 
 ---
 
-## System Methods
+## System & Utility Methods
 
 ### frappe.get_system_settings(fieldname)
 
-Shortcut for System Settings values.
+Shortcut for `frappe.db.get_single_value("System Settings", fieldname)`.
 
 ```jinja
-{% if frappe.get_system_settings('country') == 'India' %}
-    <p>GST: {{ doc.gst_amount }}</p>
+{% if frappe.get_system_settings("country") == "India" %}
+    <p>GST: {{ doc.get_formatted("gst_amount") }}</p>
 {% endif %}
 ```
 
 ### frappe.get_meta(doctype)
 
-Retrieves DocType metadata.
+Returns DocType metadata (field definitions, properties).
 
 ```jinja
-{% set meta = frappe.get_meta('Task') %}
-<p>Task has {{ meta.fields | length }} fields.</p>
-{% if meta.get_field('status') %}
-    <p>Status field exists</p>
+{% set meta = frappe.get_meta("Task") %}
+<p>{{ meta.fields | length }} fields defined</p>
+
+{% if meta.get_field("priority") %}
+    <p>Priority field exists</p>
 {% endif %}
 ```
 
 ### frappe.get_fullname(user=None)
 
-Returns the full name of a user.
+Returns the full name of a user. Defaults to current session user.
 
 ```jinja
 {# Current user #}
-<p>Prepared by: {{ frappe.get_fullname() }}</p>
+<p>{{ _("Prepared by") }}: {{ frappe.get_fullname() }}</p>
 
 {# Specific user #}
-<p>Owner: {{ frappe.get_fullname(doc.owner) }}</p>
+<p>{{ _("Owner") }}: {{ frappe.get_fullname(doc.owner) }}</p>
 ```
+
+### frappe.get_url()
+
+Returns the site URL (e.g., `https://mysite.frappe.cloud`).
+
+```jinja
+<a href="{{ frappe.get_url() }}/app/sales-invoice/{{ doc.name }}">
+    {{ _("View Invoice") }}
+</a>
+```
+
+### frappe.render_template(template, context)
+
+Renders another Jinja template with a given context.
+
+```jinja
+{# Render a template file #}
+{{ frappe.render_template("templates/includes/footer.html", {}) }}
+
+{# Render a string template #}
+{{ frappe.render_template("Hello {{ name }}", {"name": "World"}) }}
+```
+
+### _() — Translation Function
+
+Translates a string to the current language.
+
+```jinja
+<h1>{{ _("Invoice") }}</h1>
+<p>{{ _("Total: {0}").format(doc.get_formatted("grand_total")) }}</p>
+<p>{{ _("Dear {0}").format(doc.customer_name) }}</p>
+```
+
+ALWAYS wrap user-facing strings with `_()`. NEVER translate field values — they are already translatable via the Frappe translation framework.
 
 ---
 
@@ -166,52 +213,57 @@ Returns the full name of a user.
 ### frappe.session.user
 
 ```jinja
-{% if frappe.session.user != 'Guest' %}
-    <p>Welcome, {{ frappe.get_fullname() }}</p>
+{% if frappe.session.user != "Guest" %}
+    <p>{{ _("Logged in as") }}: {{ frappe.session.user }}</p>
 {% endif %}
 ```
 
 ### frappe.session.csrf_token
 
 ```jinja
-<input type="hidden" name="csrf_token" value="{{ frappe.session.csrf_token }}">
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ frappe.session.csrf_token }}">
+</form>
 ```
 
 ### frappe.form_dict
 
-Query parameters for web requests.
+Query parameters dictionary. Available in web requests only.
 
 ```jinja
-{# URL: /page?name=John&age=30 #}
+{# URL: /page?status=Open&limit=10 #}
 {% if frappe.form_dict %}
-    <p>Name: {{ frappe.form_dict.name }}</p>
-    <p>Age: {{ frappe.form_dict.age }}</p>
+    {% set status = frappe.form_dict.status | default("All") %}
+    {% set limit = frappe.form_dict.limit | default(20) | int %}
+{% endif %}
+```
+
+### frappe.lang
+
+Current language code (two-letter lowercase).
+
+```jinja
+{% if frappe.lang == "ar" %}
+    <div dir="rtl">...</div>
 {% endif %}
 ```
 
 ---
 
-## Template Methods
+## Method Availability by Template Type
 
-### frappe.render_template(template, context)
-
-Renders another Jinja template.
-
-```jinja
-{# Render template file #}
-{{ frappe.render_template('templates/includes/footer/footer.html', {}) }}
-
-{# Render string template #}
-{{ frappe.render_template('{{ foo }}', {'foo': 'bar'}) }}
-{# Output: bar #}
-```
-
-### _(string) - Translation Function
-
-```jinja
-<h1>{{ _("Invoice") }}</h1>
-<p>{{ _("Thank you for your business!") }}</p>
-
-{# With variables #}
-<p>{{ _("Total: {0}").format(doc.grand_total) }}</p>
-```
+| Method | Print Format | Email | Notification | Portal |
+|--------|:---:|:---:|:---:|:---:|
+| `doc.get_formatted()` | Yes | Yes | Yes | N/A |
+| `frappe.format()` | Yes | Yes | Yes | Yes |
+| `frappe.format_date()` | Yes | Yes | Yes | Yes |
+| `frappe.get_doc()` | Yes | Yes | Yes | Yes |
+| `frappe.get_all()` | Yes | Yes | Yes | Yes |
+| `frappe.get_list()` | Yes | Yes | Yes | Yes |
+| `frappe.db.get_value()` | Yes | Yes | Yes | Yes |
+| `frappe.get_fullname()` | Yes | Yes | Yes | Yes |
+| `frappe.get_url()` | Yes | Yes | Yes | Yes |
+| `frappe.session.user` | Yes | N/A | N/A | Yes |
+| `frappe.form_dict` | N/A | N/A | N/A | Yes |
+| `frappe.render_template()` | Yes | Yes | Yes | Yes |
+| `_()` | Yes | Yes | Yes | Yes |

@@ -1,425 +1,303 @@
 # Lifecycle Methods Reference
 
-> Complete documentatie van alle Document Controller lifecycle hooks in Frappe/ERPNext.
+Complete reference for all Document Controller lifecycle hooks in Frappe v14-v16.
 
 ---
 
-## Event Mapping Tabel
+## Complete Hook Table
 
-| Interne Hook | UI/Server Script Event | Wanneer | Returnable |
-|--------------|------------------------|---------|------------|
-| `before_insert` | Before Insert | Voor nieuw document naar DB gaat | Nee |
-| `after_insert` | After Insert | Na nieuw document opgeslagen | Nee |
-| `before_validate` | Before Validate | Voor validatie begint | Nee |
-| `validate` | Before Save | Hoofdvalidatie (nieuw of update) | Nee |
-| `before_save` | - | Na validate, voor DB write | Nee |
-| `on_update` | After Save | Na document succesvol opgeslagen | Nee |
-| `on_change` | (intern) | Na elke wijziging, ook db_set | Nee |
-| `before_rename` | Before Rename | Voor document hernoemd wordt | Nee |
-| `after_rename` | After Rename | Na document hernoemd is | Nee |
-| `before_submit` | Before Submit | Voor docstatus 0â†’1 | Nee |
-| `on_submit` | After Submit | Na document submit | Nee |
-| `before_cancel` | Before Cancel | Voor docstatus 1â†’2 | Nee |
-| `on_cancel` | After Cancel | Na document cancel | Nee |
-| `before_discard` | Before Discard | Voor draft verwijderd (v15) | Nee |
-| `on_discard` | After Discard | Na draft verwijderd (v15) | Nee |
-| `on_trash` | Before Delete | Voor document verwijderd | Nee |
-| `after_delete` | After Delete | Na document verwijderd | Nee |
-| `before_update_after_submit` | Before Save (Submitted) | Voor update submitted doc | Nee |
-| `on_update_after_submit` | After Save (Submitted) | Na update submitted doc | Nee |
-| `before_print` | Before Print | Voor print format rendert | Nee |
-
----
-
-## Naming-Specifieke Hooks
-
-| Hook | Wanneer | Gebruik |
-|------|---------|---------|
-| `before_naming` | Voor name generatie | Wijzig naming parameters |
-| `autoname` | Tijdens name generatie | Genereer custom name programmatisch |
+| Hook | Runs During | When | Can Modify self? | Version |
+|---|---|---|---|---|
+| `before_insert` | insert | Before naming, before DB write | Yes | All |
+| `before_naming` | insert | Before name generation | Yes (naming params) | All |
+| `autoname` | insert | During name generation | Sets self.name | All |
+| `before_validate` | insert, save, submit | Before validate() | Yes | All |
+| `validate` | insert, save, submit | Main validation | Yes (saved to DB) | All |
+| `before_save` | insert, save, submit | After validate, before DB write | Yes (saved to DB) | All |
+| `after_insert` | insert | After DB insert, before on_update | Yes (NOT saved) | All |
+| `on_update` | insert, save | After DB write | No (use db_set) | All |
+| `on_change` | insert, save, submit, cancel, db_set | After any value change | No | All |
+| `before_submit` | submit | Before docstatus changes to 1 | Yes (saved to DB) | All |
+| `on_submit` | submit | After docstatus = 1 in DB | No (use db_set) | All |
+| `before_cancel` | cancel | Before docstatus changes to 2 | Yes | All |
+| `on_cancel` | cancel | After docstatus = 2 in DB | No (use db_set) | All |
+| `before_update_after_submit` | update_after_submit | Before submitted doc update | Yes | All |
+| `on_update_after_submit` | update_after_submit | After submitted doc update | No | All |
+| `on_trash` | delete | Before DB delete | Yes | All |
+| `after_delete` | delete | After DB delete | N/A | All |
+| `before_rename` | rename | Before name change | Yes | All |
+| `after_rename` | rename | After name change | No | All |
+| `before_print` | print | Before print format renders | Yes | All |
+| `before_discard` | discard | Before draft discard | Yes | v15+ |
+| `on_discard` | discard | After draft discard | No | v15+ |
 
 ---
 
-## Execution Order Diagrammen
+## Execution Order Diagrams
 
-### INSERT (Nieuw Document)
-
-```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         doc.insert()                            â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  1. before_insert                                               â”‚
-â”‚     â€¢ Laatste kans om velden aan te passen voor naming          â”‚
-â”‚     â€¢ doc.name is nog NIET beschikbaar                          â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  2. before_naming                                               â”‚
-â”‚     â€¢ Wijzig naming_series of andere naming parameters          â”‚
-â”‚     â€¢ Draait VOOR autoname                                      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  3. autoname                                                    â”‚
-â”‚     â€¢ Genereer doc.name programmatisch                          â”‚
-â”‚     â€¢ Overschrijft DocType Auto Name configuratie               â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  4. before_validate                                             â”‚
-â”‚     â€¢ doc.name is NU beschikbaar                                â”‚
-â”‚     â€¢ Pre-validatie setup                                       â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  5. validate                                                    â”‚
-â”‚     â€¢ HOOFDVALIDATIE - alle business logic hier                 â”‚
-â”‚     â€¢ Gebruik frappe.throw() voor errors                        â”‚
-â”‚     â€¢ Wijzigingen aan self worden opgeslagen                    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  6. before_save                                                 â”‚
-â”‚     â€¢ Laatste kans voor wijzigingen voor DB                     â”‚
-â”‚     â€¢ Na alle validatie                                         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  [db_insert - INTERN]                                           â”‚
-â”‚     â€¢ Document wordt in database geschreven                     â”‚
-â”‚     â€¢ GEEN custom code hier mogelijk                            â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  7. after_insert                                                â”‚
-â”‚     â€¢ Document is NU in database                                â”‚
-â”‚     â€¢ Goed voor: gerelateerde docs maken, notifications         â”‚
-â”‚     â€¢ NIET voor wijzigingen aan self (gebruik db_set)           â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  8. on_update                                                   â”‚
-â”‚     â€¢ Draait na ELKE save (insert of update)                    â”‚
-â”‚     â€¢ Wijzigingen aan self worden NIET opgeslagen               â”‚
-â”‚     â€¢ Gebruik db_set voor post-save wijzigingen                 â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  9. on_change                                                   â”‚
-â”‚     â€¢ Draait na ELKE wijziging, ook db_set                      â”‚
-â”‚     â€¢ Laatste hook in de keten                                  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-```
-
-### SAVE (Bestaand Document)
+### INSERT (New Document)
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         doc.save()                              â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  1. before_validate                                             â”‚
-â”‚     â€¢ doc.get_doc_before_save() beschikbaar                     â”‚
-â”‚     â€¢ Pre-validatie setup                                       â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  2. validate                                                    â”‚
-â”‚     â€¢ Vergelijk met vorige versie via get_doc_before_save()     â”‚
-â”‚     â€¢ Alle business logic                                       â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  3. before_save                                                 â”‚
-â”‚     â€¢ Laatste kans voor wijzigingen                             â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  [db_update - INTERN]                                           â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  4. on_update                                                   â”‚
-â”‚     â€¢ Document is NU geÃ¼pdatet in database                      â”‚
-â”‚     â€¢ Wijzigingen aan self worden NIET opgeslagen               â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  5. on_change                                                   â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+doc.insert()
+  |
+  v
+1. before_insert
+   - Last chance to modify fields before naming
+   - self.name is NOT yet available
+  |
+  v
+2. before_naming
+   - Modify naming_series or naming parameters
+   - Runs BEFORE autoname
+  |
+  v
+3. autoname
+   - Generate self.name programmatically
+   - Overrides DocType Auto Name setting
+  |
+  v
+4. before_validate
+   - self.name IS now available
+   - Pre-validation setup
+  |
+  v
+5. validate
+   - MAIN validation and calculations
+   - Use frappe.throw() to block save
+   - Changes to self ARE saved
+  |
+  v
+6. before_save
+   - Final chance for modifications before DB write
+   - After all validation has passed
+  |
+  v
+7. [db_insert - INTERNAL]
+   - Document written to database
+   - No custom code possible here
+  |
+  v
+8. after_insert
+   - Document exists in DB with name
+   - Changes to self are NOT saved
+   - Runs ONLY for new documents (not updates)
+  |
+  v
+9. on_update
+   - After successful save
+   - Changes to self are NOT saved
+   - Use self.db_set() or frappe.db.set_value()
+  |
+  v
+10. on_change
+    - After any value change
+    - MUST be idempotent (may run multiple times)
 ```
 
-### SUBMIT (Docstatus 0 â†’ 1)
+### SAVE (Existing Document)
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         doc.submit()                            â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  1. before_validate â†’ 2. validate â†’ 3. before_submit            â”‚
-â”‚     â€¢ Normale validatie keten draait eerst                      â”‚
-â”‚     â€¢ Dan before_submit voor submit-specifieke checks           â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  [db_update - docstatus=1]                                      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  4. on_update â†’ 5. on_submit â†’ 6. on_change                     â”‚
-â”‚     â€¢ on_submit voor submit-specifieke acties                   â”‚
-â”‚     â€¢ Stock ledger entries, GL entries, etc.                    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+doc.save()
+  |
+  v
+1. before_validate
+  |
+  v
+2. validate
+   - Changes to self ARE saved
+  |
+  v
+3. before_save
+  |
+  v
+4. [db_update - INTERNAL]
+  |
+  v
+5. on_update
+   - Changes to self are NOT saved
+  |
+  v
+6. on_change
 ```
 
-### CANCEL (Docstatus 1 â†’ 2)
+### SUBMIT (docstatus 0 -> 1)
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                         doc.cancel()                            â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  1. before_cancel                                               â”‚
-â”‚     â€¢ Check of cancel is toegestaan                             â”‚
-â”‚     â€¢ Controleer linked documents                               â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  [db_update - docstatus=2]                                      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  2. on_cancel                                                   â”‚
-â”‚     â€¢ Reverse ledger entries                                    â”‚
-â”‚     â€¢ Update gerelateerde documenten                            â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  [check_no_back_links_exist - INTERN]                           â”‚
-â”‚     â€¢ Frappe controleert of geen andere docs linken             â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  3. on_change                                                   â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+doc.submit()
+  |
+  v
+1. before_validate
+  |
+  v
+2. validate
+  |
+  v
+3. before_submit
+   - Last chance to block submit with frappe.throw()
+   - Changes to self ARE saved
+  |
+  v
+4. [db_update with docstatus=1 - INTERNAL]
+  |
+  v
+5. on_submit
+   - Create ledger entries, stock entries here
+   - Changes to self are NOT saved
+  |
+  v
+6. on_update
+  |
+  v
+7. on_change
+```
+
+### CANCEL (docstatus 1 -> 2)
+
+```
+doc.cancel()
+  |
+  v
+1. before_cancel
+   - Check for linked submitted documents
+   - Use frappe.throw() to block cancel
+  |
+  v
+2. [db_update with docstatus=2 - INTERNAL]
+  |
+  v
+3. on_cancel
+   - ALWAYS reverse what on_submit created
+   - Changes to self are NOT saved
+  |
+  v
+4. on_change
 ```
 
 ### UPDATE AFTER SUBMIT
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚              doc.save() (op submitted document)                 â”‚
-â”‚              Alleen "Allow on Submit" velden                    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  1. before_update_after_submit                                  â”‚
-â”‚     â€¢ Valideer wijzigingen aan submitted doc                    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  [db_update]                                                    â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  2. on_update_after_submit â†’ 3. on_change                       â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+doc.save() [when docstatus == 1]
+  |
+  v
+1. before_update_after_submit
+   - Only fields with "Allow on Submit" can change
+  |
+  v
+2. [db_update - INTERNAL]
+  |
+  v
+3. on_update_after_submit
+  |
+  v
+4. on_change
 ```
 
 ### DELETE
 
 ```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚                       doc.delete()                              â”‚
-â”‚                  of frappe.delete_doc()                         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  1. on_trash                                                    â”‚
-â”‚     â€¢ Cleanup gerelateerde data                                 â”‚
-â”‚     â€¢ NAAM: "on_trash" maar draait VOOR delete                  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  [DELETE FROM database - INTERN]                                â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                               â”‚
-                               â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  2. after_delete                                                â”‚
-â”‚     â€¢ doc.name is nog beschikbaar                               â”‚
-â”‚     â€¢ Document is NIET meer in database                         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+doc.delete() / frappe.delete_doc()
+  |
+  v
+1. on_trash
+   - Clean up related data
+   - NEVER delete linked submitted documents here
+  |
+  v
+2. [db_delete - INTERNAL]
+  |
+  v
+3. after_delete
+   - Document no longer exists in DB
+```
+
+### DISCARD [v15+]
+
+```
+doc.discard()
+  |
+  v
+1. before_discard
+   - Only for draft documents (docstatus=0)
+  |
+  v
+2. [db_set docstatus=2 - INTERNAL]
+  |
+  v
+3. on_discard
+```
+
+### RENAME
+
+```
+frappe.rename_doc()
+  |
+  v
+1. before_rename
+  |
+  v
+2. [rename in DB - INTERNAL]
+  |
+  v
+3. after_rename
 ```
 
 ---
 
-## Hook Implementatie Voorbeelden
-
-### validate - Hoofdvalidatie
+## Hook Method Signatures
 
 ```python
-def validate(self):
-    """Hoofdvalidatie hook - alle business logic hier."""
-    # Verplichte velden (aanvullend op DocType config)
-    if not self.items:
-        frappe.throw(_("At least one item is required"))
-    
-    # Cross-field validatie
-    if self.from_date and self.to_date:
-        if self.from_date > self.to_date:
-            frappe.throw(_("From Date cannot be after To Date"))
-    
-    # Berekeningen
-    self.total = sum(item.amount for item in self.items)
-    
-    # Vergelijk met vorige versie
-    old_doc = self.get_doc_before_save()
-    if old_doc and old_doc.status != self.status:
-        self.flags.status_changed = True
-```
+class MyDocType(Document):
+    # Naming hooks
+    def before_naming(self, *args, **kwargs): ...
+    def autoname(self): ...
 
-### on_update - Post-Save Acties
+    # Insert hooks
+    def before_insert(self): ...
+    def after_insert(self): ...
 
-```python
-def on_update(self):
-    """Post-save acties - document is al opgeslagen."""
-    # BELANGRIJK: wijzigingen aan self worden NIET opgeslagen
-    # Gebruik db_set voor wijzigingen:
-    if self.flags.get('status_changed'):
-        frappe.db.set_value(
-            self.doctype, self.name, 
-            "status_updated_on", frappe.utils.now()
-        )
-    
-    # Update gerelateerde documenten
-    self.update_linked_orders()
-    
-    # Notifications
-    if self.notify_customer:
-        self.queue_action('send_notification_email')
-```
+    # Validation and save hooks
+    def before_validate(self): ...
+    def validate(self): ...
+    def before_save(self): ...
+    def on_update(self): ...
+    def on_change(self): ...
 
-### before_submit / on_submit
+    # Submit hooks
+    def before_submit(self): ...
+    def on_submit(self): ...
 
-```python
-def before_submit(self):
-    """Pre-submit checks - kan submit blokkeren."""
-    if self.total > 50000 and not self.manager_approval:
-        frappe.throw(_("Manager approval required for orders over 50,000"))
+    # Cancel hooks
+    def before_cancel(self): ...
+    def on_cancel(self): ...
 
-def on_submit(self):
-    """Post-submit acties - document heeft docstatus=1."""
-    # Maak stock ledger entries
-    self.update_stock_ledger()
-    
-    # Update ordered qty in andere docs
-    self.update_ordered_qty()
-```
+    # Update after submit hooks
+    def before_update_after_submit(self): ...
+    def on_update_after_submit(self): ...
 
-### before_cancel / on_cancel
+    # Delete hooks
+    def on_trash(self): ...
+    def after_delete(self): ...
 
-```python
-def before_cancel(self):
-    """Pre-cancel checks - kan cancel blokkeren."""
-    if self.has_linked_invoices():
-        frappe.throw(_("Cannot cancel - linked invoices exist"))
+    # Rename hooks
+    def before_rename(self, old_name, new_name, merge=False): ...
+    def after_rename(self, old_name, new_name, merge=False): ...
 
-def on_cancel(self):
-    """Post-cancel acties - document heeft docstatus=2."""
-    # Reverse stock ledger entries
-    self.reverse_stock_ledger()
-    
-    # Update ordered qty
-    self.reverse_ordered_qty()
-```
+    # Print hooks
+    def before_print(self, print_settings=None): ...
 
-### autoname - Custom Naming
-
-```python
-def autoname(self):
-    """Genereer custom document name."""
-    from frappe.model.naming import getseries
-    
-    # Voorbeeld: P-CUS-001
-    prefix = f"P-{self.customer[:3].upper()}-"
-    self.name = getseries(prefix, 3)
+    # Discard hooks [v15+]
+    def before_discard(self): ...
+    def on_discard(self): ...
 ```
 
 ---
 
-## Versie Verschillen
+## Key Rules
 
-| Hook | v14 | v15 |
-|------|-----|-----|
-| `before_discard` | âŒ | âœ… Nieuw |
-| `on_discard` | âŒ | âœ… Nieuw |
-| `flags.notify_update` | âŒ | âœ… Nieuw |
-
----
-
-## Decision Tree: Welke Hook Gebruiken?
-
-```
-Wat wil je doen?
-â”‚
-â”œâ”€â–º Velden valideren/berekenen?
-â”‚   â””â”€â–º validate
-â”‚
-â”œâ”€â–º Document name aanpassen?
-â”‚   â””â”€â–º autoname (programmatisch) of before_naming (parameters)
-â”‚
-â”œâ”€â–º Actie na save (emails, logs, linked docs)?
-â”‚   â””â”€â–º on_update
-â”‚
-â”œâ”€â–º Specifiek voor NIEUWE documenten?
-â”‚   â””â”€â–º after_insert (alleen bij insert, niet bij save)
-â”‚
-â”œâ”€â–º Specifiek voor SUBMIT?
-â”‚   â”œâ”€â–º Vooraf checken? â†’ before_submit
-â”‚   â””â”€â–º Achteraf acties? â†’ on_submit
-â”‚
-â”œâ”€â–º Specifiek voor CANCEL?
-â”‚   â”œâ”€â–º Vooraf checken? â†’ before_cancel
-â”‚   â””â”€â–º Achteraf cleanup? â†’ on_cancel
-â”‚
-â”œâ”€â–º Bij ELKE wijziging (ook db_set)?
-â”‚   â””â”€â–º on_change
-â”‚
-â””â”€â–º Voordat document verwijderd wordt?
-    â””â”€â–º on_trash (cleanup) of after_delete (logging)
-```
+1. **validate** is the ONLY hook where changes to `self` are reliably saved to DB
+2. **on_update**, **on_submit**, **on_cancel** run AFTER the DB write -- changes to self are NOT saved
+3. **on_change** MUST be idempotent -- it runs after every value change including `db_set`
+4. **after_insert** runs ONLY for new documents, NEVER for updates
+5. **before_submit** can block submit with `frappe.throw()` -- use for approval checks
+6. ALWAYS implement `on_cancel` as the reverse of `on_submit`
+7. NEVER call `frappe.db.commit()` inside any hook

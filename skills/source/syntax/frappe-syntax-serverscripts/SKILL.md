@@ -14,181 +14,295 @@ metadata:
   version: "2.0"
 ---
 
-# ERPNext Server Scripts Syntax
+# Frappe Server Scripts — Complete Reference
 
-Server Scripts are Python scripts that run within Frappe's secure sandbox environment. They are managed via **Setup → Server Script** in the ERPNext UI.
+Server Scripts are Python scripts managed via **Setup > Server Script** in the
+Frappe/ERPNext UI. They run inside a **RestrictedPython sandbox**.
 
-## CRITICAL: Sandbox Limitations
+## CRITICAL: The Sandbox Rule
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ ⚠️  NO IMPORTS ALLOWED                                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│ The sandbox blocks ALL import statements:                          │
-│   import json        → ImportError: __import__ not found           │
-│   from datetime import date  → ImportError                         │
-│                                                                     │
-│ SOLUTION: Use Frappe's pre-loaded namespace:                       │
-│   frappe.utils.nowdate()     not: from frappe.utils import nowdate │
-│   frappe.parse_json(data)    not: import json; json.loads(data)    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│  ALL import STATEMENTS ARE BLOCKED                               │
+│                                                                  │
+│  import json             → ImportError: __import__ not found     │
+│  from datetime import *  → ImportError: __import__ not found     │
+│  import frappe           → ImportError (even frappe itself!)     │
+│                                                                  │
+│  EVERYTHING you need is pre-loaded in the frappe namespace.      │
+│  NEVER write an import line. ALWAYS use frappe.utils.*, etc.     │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Server Script Types
+**ALWAYS** use the pre-loaded namespace instead of imports:
 
-| Type | Usage | Trigger |
-|------|-------|---------|
-| **Document Event** | React to document lifecycle | Save, Submit, Cancel, etc. |
-| **API** | Custom REST endpoint | HTTP request to `/api/method/{name}` |
-| **Scheduler Event** | Scheduled tasks | Cron schedule |
-| **Permission Query** | Dynamic list filtering | Document list view |
+| Blocked import | Use instead |
+|---|---|
+| `import json` | `frappe.parse_json()` / `frappe.as_json()` |
+| `from datetime import date` | `frappe.utils.today()` / `frappe.utils.now_datetime()` |
+| `from frappe.utils import cint` | `frappe.utils.cint()` (already loaded) |
+| `import requests` | `frappe.make_get_request()` / `frappe.make_post_request()` |
+| `import re` | Not available — restructure logic without regex |
+| `import os` / `import sys` | Not available — use a custom app instead |
 
-## Event Name Mapping (Document Event)
+## Enabling Server Scripts
 
-**IMPORTANT**: The UI event names differ from the internal hook names:
+```bash
+# v14: enabled by default
+# v15+: DISABLED by default — you MUST enable explicitly:
+bench set-config -g server_script_enabled 1
+# Or set server_script_enabled: true in site_config.json
+```
 
-| UI Name (Server Script) | Internal Hook | When |
-|-------------------------|---------------|------|
-| Before Insert | `before_insert` | Before new doc to DB |
-| After Insert | `after_insert` | After new doc saved |
-| Before Validate | `before_validate` | Before validation |
-| **Before Save** | **`validate`** | Before save (new or update) |
+**NEVER** expect Server Scripts to work on Frappe Cloud shared benches — they
+require a private bench.
+
+## Script Types
+
+| Type | Trigger | Key Variable |
+|---|---|---|
+| **Document Event** | Document lifecycle (save, submit, cancel) | `doc` |
+| **API** | HTTP request to `/api/method/{name}` | `frappe.form_dict` |
+| **Scheduler Event** | Cron schedule | (none) |
+| **Permission Query** | Document list filtering | `user`, `conditions` |
+
+## Event Name Mapping (Document Events)
+
+**CRITICAL**: The UI names differ from internal hook names:
+
+| Server Script UI | Internal Hook | Fires When |
+|---|---|---|
+| Before Insert | `before_insert` | Before new doc saved to DB |
+| After Insert | `after_insert` | After first DB insert |
+| Before Validate | `before_validate` | Before framework validation |
+| **Before Save** | **`validate`** | Before save (new + update) |
 | After Save | `on_update` | After successful save |
-| Before Submit | `before_submit` | Before submit |
-| After Submit | `on_submit` | After submit |
-| Before Cancel | `before_cancel` | Before cancel |
-| After Cancel | `on_cancel` | After cancel |
-| Before Delete | `on_trash` | Before delete |
-| After Delete | `after_delete` | After delete |
+| Before Submit | `before_submit` | Before submit (docstatus 0→1) |
+| After Submit | `on_submit` | After submit completes |
+| Before Cancel | `before_cancel` | Before cancel (docstatus 1→2) |
+| After Cancel | `on_cancel` | After cancel completes |
+| Before Delete | `on_trash` | Before permanent delete |
+| After Delete | `after_delete` | After permanent delete |
 
-## Quick Reference: Available API
+**NEVER** confuse "Before Save" with `before_save` — the UI label "Before Save"
+maps to the `validate` hook. The actual `before_save` hook runs AFTER `validate`.
 
-### Always available in sandbox
+## Decision Tree: Server Script vs Document Controller
+
+```
+Need custom Python logic for a DocType?
+│
+├─► Can you install a custom Frappe app?
+│   ├─► YES: Use a Document Controller when you need:
+│   │   • import statements (any Python library)
+│   │   • File system access
+│   │   • Complex class inheritance
+│   │   • autoname / before_naming hooks
+│   │   • Unit-testable code
+│   │
+│   └─► NO: Use a Server Script when:
+│       • You only have UI access (no bench CLI)
+│       • Logic is simple validation / field calculation
+│       • You need a quick API endpoint
+│       • You need dynamic permission filtering
+│
+└─► Is logic > 50 lines or needs external libraries?
+    ├─► YES → Document Controller in a custom app
+    └─► NO  → Server Script is fine
+```
+
+## Quick Reference: Available in Sandbox
+
+### Pre-loaded Objects
 
 ```python
-# Document object (in Document Event scripts)
-doc                      # Current document
-doc.name                 # Document name
-doc.doctype              # DocType name
-doc.fieldname            # Field value
-doc.get("fieldname")     # Safe field access
-doc.items                # Child table (list)
-
-# Frappe namespace
-frappe.db                # Database operations
-frappe.get_doc()         # Fetch document
-frappe.get_all()         # Multiple documents
-frappe.throw()           # Validation error
-frappe.msgprint()        # User message
-frappe.log_error()       # Error logging
-frappe.utils.*           # Utility functions
-frappe.session.user      # Current user
-frappe.form_dict         # Request parameters (API)
-frappe.response          # Response object (API)
+doc                         # Current document (Document Event only)
+frappe                      # Core namespace — ALWAYS available
+frappe.db                   # Database operations
+frappe.utils                # Date, number, string utilities
+frappe.session              # Current session (user, csrf_token)
+frappe.form_dict            # Request parameters (API scripts)
+frappe.response             # Response object (API scripts)
+frappe.request              # Werkzeug request object
+frappe.qb                   # Query Builder (v14+)
+json                        # Python json module (pre-loaded)
 ```
 
-## Decision Tree: Which Script Type?
+### Core Methods
 
-```
-What do you want to achieve?
-│
-├─► React to document save/submit/cancel?
-│   └─► Document Event script
-│
-├─► Create REST API endpoint?
-│   └─► API script
-│
-├─► Run task on schedule?
-│   └─► Scheduler Event script
-│
-└─► Filter document list view per user/role?
-    └─► Permission Query script
+```python
+# Documents
+frappe.get_doc(doctype, name)           # Fetch document
+frappe.new_doc(doctype)                 # Create new document
+frappe.get_cached_doc(doctype, name)    # Cached fetch (read-only)
+frappe.get_last_doc(doctype)            # Most recent document
+frappe.get_mapped_doc(...)              # Map fields between DocTypes
+frappe.delete_doc(doctype, name)        # Delete document
+frappe.rename_doc(doctype, old, new)    # Rename document
+
+# Querying
+frappe.get_all(doctype, filters, fields, order_by, limit)   # No permission check
+frappe.get_list(doctype, filters, fields, order_by, limit)  # With permission check
+frappe.db.get_value(doctype, name, fieldname)
+frappe.db.get_single_value(doctype, fieldname)
+frappe.db.set_value(doctype, name, fieldname, value)
+frappe.db.exists(doctype, name_or_filters)
+frappe.db.count(doctype, filters)
+frappe.db.sql(query, values, as_dict)   # ALWAYS parameterize!
+frappe.db.escape(value)                 # SQL escape
+frappe.db.commit()                      # ONLY in Scheduler scripts
+frappe.db.rollback()                    # ONLY in Scheduler scripts
+
+# Messaging
+frappe.throw(msg, exc, title)           # Stop execution + show error
+frappe.msgprint(msg, title, indicator)  # User notification
+frappe.log_error(message, title)        # Error Log entry
+
+# HTTP (yes, these work in sandbox!)
+frappe.make_get_request(url, params, headers)
+frappe.make_post_request(url, data, headers)
+frappe.make_put_request(url, data, headers)
+
+# Email
+frappe.sendmail(recipients, sender, subject, message)
+
+# Utilities
+frappe.utils.today()                    # "2024-01-15"
+frappe.utils.now()                      # "2024-01-15 10:30:00"
+frappe.utils.now_datetime()             # datetime object
+frappe.utils.add_days(date, n)          # Date arithmetic
+frappe.utils.add_months(date, n)
+frappe.utils.date_diff(d1, d2)          # Days between dates
+frappe.utils.flt(val)                   # Safe float (None → 0.0)
+frappe.utils.cint(val)                  # Safe int (None → 0)
+frappe.utils.cstr(val)                  # Safe string (None → "")
+frappe.parse_json(string)               # JSON string → dict/list
+frappe.as_json(obj)                     # dict/list → JSON string
+frappe.render_template(template, ctx)   # Jinja rendering
+frappe.get_url()                        # Site URL
+frappe.get_hooks(hook)                  # Read app hooks
+run_script(script_name, **kwargs)       # Call another Server Script
+
+# Session / Permissions
+frappe.session.user                     # Current user email
+frappe.get_roles(user)                  # User's roles list
+frappe.has_permission(doctype, ptype, doc)
+frappe.get_fullname(user)               # User's display name
+_("translatable string")               # Translation function
 ```
 
-## Basic Syntax per Type
+### Python Builtins Available
+
+```python
+str, int, float, bool, list, dict, tuple, set  # Types
+range, enumerate, zip, map, filter              # Iteration
+sum, min, max, len, sorted, reversed            # Aggregation
+isinstance, type, hasattr, getattr              # Introspection
+all, any, abs, round, divmod                    # Math/logic
+print                                           # → server log
+True, False, None                               # Constants
+```
+
+### Python Builtins BLOCKED
+
+```python
+open, file          # No file I/O
+eval, exec, compile # No dynamic code execution
+__import__          # No imports (this is the root cause)
+globals, locals     # No scope introspection
+```
+
+## Syntax Per Script Type
 
 ### Document Event
 
 ```python
-# Configuration:
-#   Reference DocType: Sales Invoice
-#   DocType Event: Before Save (= validate)
-
+# Config: Reference DocType = Sales Invoice, Event = Before Save
 if doc.grand_total < 0:
-    frappe.throw("Total cannot be negative")
+    frappe.throw("Total MUST NOT be negative")
 
-if doc.grand_total > 10000:
-    doc.requires_approval = 1
+doc.requires_approval = 1 if doc.grand_total > 10000 else 0
 ```
 
 ### API
 
 ```python
-# Configuration:
-#   API Method: get_customer_info
-#   Allow Guest: No
-# Endpoint: /api/method/get_customer_info
-
+# Config: API Method = get_customer_orders, Allow Guest = No
+# Endpoint: /api/method/get_customer_orders
 customer = frappe.form_dict.get("customer")
 if not customer:
-    frappe.throw("Customer parameter required")
+    frappe.throw("Parameter 'customer' is required")
 
-data = frappe.get_all(
-    "Sales Order",
+orders = frappe.get_all("Sales Order",
     filters={"customer": customer, "docstatus": 1},
-    fields=["name", "grand_total"],
-    limit=10
+    fields=["name", "grand_total", "status"],
+    order_by="creation desc",
+    limit=20
 )
-frappe.response["message"] = data
+frappe.response["message"] = {"orders": orders, "count": len(orders)}
 ```
 
 ### Scheduler Event
 
 ```python
-# Configuration:
-#   Event Frequency: Cron
-#   Cron Format: 0 9 * * * (daily at 9:00)
-
-overdue = frappe.get_all(
-    "Sales Invoice",
-    filters={"status": "Unpaid", "due_date": ["<", frappe.utils.today()]},
-    fields=["name", "customer"]
+# Config: Event Frequency = Cron, Cron Format = 0 9 * * *
+overdue = frappe.get_all("Sales Invoice",
+    filters={"status": "Unpaid", "due_date": ["<", frappe.utils.today()], "docstatus": 1},
+    fields=["name", "customer", "grand_total"]
 )
-
 for inv in overdue:
-    frappe.log_error(f"Overdue: {inv.name}", "Invoice Reminder")
+    frappe.log_error(f"Overdue: {inv.name} ({inv.customer})", "Invoice Reminder")
 
-frappe.db.commit()
+frappe.db.commit()  # ALWAYS commit in Scheduler scripts
 ```
 
 ### Permission Query
 
 ```python
-# Configuration:
-#   Reference DocType: Sales Invoice
-# Output: conditions string for WHERE clause
-
-user_roles = frappe.get_roles(user)
-
-if "System Manager" in user_roles:
-    conditions = ""  # Full access
-elif "Sales User" in user_roles:
+# Config: Reference DocType = Sales Invoice
+# Variables available: user, conditions
+roles = frappe.get_roles(user)
+if "System Manager" in roles:
+    conditions = ""
+elif "Sales User" in roles:
     conditions = f"`tabSales Invoice`.owner = {frappe.db.escape(user)}"
 else:
-    conditions = "1=0"  # No access
+    conditions = "1=0"
 ```
+
+## Version Differences
+
+| Feature | v14 | v15 | v16 |
+|---|---|---|---|
+| Server Scripts enabled | By default | **Disabled by default** | Disabled by default |
+| Enable command | Not needed | `bench set-config -g server_script_enabled 1` | Same as v15 |
+| `frappe.qb` (Query Builder) | Available | Available | Available |
+| `run_script()` for libraries | v13+ | Available | Available |
+| `frappe.make_get_request()` | Available | Available | Available |
+| Frappe Cloud shared bench | Supported | **NOT supported** | NOT supported |
+
+## Top 5 Rules
+
+1. **NEVER** write `import` — everything is in the `frappe` namespace
+2. **NEVER** call `doc.save()` inside a Before Save script — causes infinite loop
+3. **NEVER** call `frappe.db.commit()` in Document Event scripts — framework handles it
+4. **ALWAYS** call `frappe.db.commit()` at the end of Scheduler scripts
+5. **ALWAYS** use parameterized queries: `%(var)s` with dict, NEVER f-strings in SQL
 
 ## References
 
-- **[references/events.md](references/events.md)** - Complete event mapping and execution order
-- **[references/methods.md](references/methods.md)** - All available frappe.* methods in sandbox
-- **[references/examples.md](references/examples.md)** - 10+ working examples per script type
-- **[references/anti-patterns.md](references/anti-patterns.md)** - Sandbox limitations and common mistakes
+- **[references/methods.md](references/methods.md)** — Complete sandbox API reference
+- **[references/events.md](references/events.md)** — Document lifecycle and execution order
+- **[references/examples.md](references/examples.md)** — Working examples per script type
+- **[references/anti-patterns.md](references/anti-patterns.md)** — Sandbox violations and common mistakes
+- **[references/syntax.md](references/syntax.md)** — Quick syntax cheat sheet
+- **[references/patterns.md](references/patterns.md)** — Common patterns (validation, auto-fill, API)
+- **[references/hooks.md](references/hooks.md)** — Server Scripts vs hooks.py interaction
 
-## Version Information
+## Cross-References
 
-- **Frappe v14+**: Server Scripts fully supported
-- **Activation required**: `bench --site [site] set-config server_script_enabled true`
-- **Frappe v15**: No significant syntax changes for Server Scripts
+- **frappe-syntax-api** — Frappe REST API and whitelisted methods
+- **frappe-syntax-doctype** — DocType field types and schema
+- **frappe-core-database** — frappe.db deep dive
+- **frappe-core-permissions** — Permission system architecture
+- **frappe-errors-common** — Error handling patterns

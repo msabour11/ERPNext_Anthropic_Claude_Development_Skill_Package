@@ -13,272 +13,198 @@ metadata:
   version: "2.0"
 ---
 
-# ERPNext Syntax: Hooks (hooks.py)
+# Frappe Configuration Hooks (hooks.py)
 
-Hooks in hooks.py enable custom apps to extend Frappe/ERPNext functionality.
+Configuration hooks in hooks.py enable custom apps to extend Frappe/ERPNext
+behavior. This skill covers ALL non-document-event hooks. For `doc_events`
+(validate, on_submit, on_update, etc.), see **frappe-syntax-hooks-events**.
 
-## Quick Reference
+## Quick Reference — Hook Categories
 
-### doc_events - Document Lifecycle
+| Category | Key Hooks | Reference |
+|----------|-----------|-----------|
+| App metadata | `app_name`, `app_title`, `required_apps` | Below |
+| Frontend assets | `app_include_js/css`, `web_include_js/css` | Below |
+| Install/migrate | `before_install`, `after_install`, `after_migrate` | Below |
+| Scheduler | `hourly`, `daily`, `cron`, `*_long` | [scheduler-events.md](references/scheduler-events.md) |
+| Session/auth | `on_login`, `on_logout`, `auth_hooks` | [bootinfo.md](references/bootinfo.md) |
+| Request middleware | `before_request`, `after_request` | Below |
+| Permissions | `permission_query_conditions`, `has_permission` | [permissions.md](references/permissions.md) |
+| DocType overrides | `override_doctype_class`, `doctype_js` | [overrides.md](references/overrides.md) |
+| Website/portal | `website_route_rules`, `portal_menu_items` | Below |
+| File handling | `before_write_file`, `write_file` | Below |
+| Email | `override_email_send`, `default_mail_footer` | Below |
+| PDF | `pdf_header_html`, `pdf_footer_html` | Below |
+| Jinja | `jinja.methods`, `jinja.filters` | Below |
+| Boot/client data | `extend_bootinfo`, `notification_config` | [bootinfo.md](references/bootinfo.md) |
+| Data/fixtures | `fixtures`, `global_search_doctypes` | Below |
+| Method overrides | `override_whitelisted_methods`, `standard_queries` | [overrides.md](references/overrides.md) |
 
-```python
-# In hooks.py
-doc_events = {
-    "*": {
-        "after_insert": "myapp.events.log_all_inserts"
-    },
-    "Sales Invoice": {
-        "validate": "myapp.events.si_validate",
-        "on_submit": "myapp.events.si_on_submit"
-    }
-}
+---
+
+## Decision Tree — Which Hook Do I Need?
+
+```
+What do you want to achieve?
+|
++-- ADD JS/CSS to desk or portal?
+|   +-- Desk --> app_include_js / app_include_css
+|   +-- Portal --> web_include_js / web_include_css
+|   +-- Specific form --> doctype_js
+|   +-- List view --> doctype_list_js
+|
++-- RUN periodic background tasks?
+|   +-- < 5 min execution --> hourly / daily / weekly / monthly
+|   +-- 5-25 min execution --> hourly_long / daily_long / etc.
+|   +-- Exact time needed --> cron
+|   See: frappe-syntax-hooks > scheduler-events.md
+|
++-- SEND data to client at page load?
+|   +-- extend_bootinfo
+|
++-- MODIFY controller of existing DocType?
+|   +-- v16+ --> extend_doctype_class (RECOMMENDED)
+|   +-- v14/v15 --> override_doctype_class (last app wins)
+|
++-- MODIFY API endpoint?
+|   +-- override_whitelisted_methods
+|
++-- CUSTOMIZE permissions?
+|   +-- List filtering --> permission_query_conditions
+|   +-- Document-level --> has_permission
+|
++-- REACT to document save/submit/delete?
+|   +-- See frappe-syntax-hooks-events skill
+|
++-- EXPORT/IMPORT configuration?
+|   +-- fixtures
+|
++-- SETUP on install or migrate?
+|   +-- after_install / after_migrate
+|
++-- ADD custom Jinja functions?
+|   +-- jinja.methods / jinja.filters
+|
++-- CUSTOMIZE website routing?
+|   +-- website_route_rules
 ```
 
-```python
-# In myapp/events.py
-import frappe
+---
 
-def si_validate(doc, method=None):
-    """doc = document object, method = event name"""
-    if doc.grand_total < 0:
-        frappe.throw("Total cannot be negative")
+## 1. App Metadata Hooks
+
+ALWAYS include these in every hooks.py:
+
+```python
+app_name = "myapp"
+app_title = "My App"
+app_publisher = "My Company"
+app_description = "Custom ERPNext extensions"
+app_email = "info@mycompany.com"
+app_license = "MIT"
+required_apps = ["erpnext"]  # Declare dependencies
 ```
 
-### scheduler_events - Periodic Tasks
+---
+
+## 2. Frontend Asset Injection
 
 ```python
-# In hooks.py
+# Desk (backend UI) assets — loaded on EVERY desk page
+app_include_js = "/assets/myapp/js/myapp.min.js"       # string or list
+app_include_css = "/assets/myapp/css/myapp.min.css"
+
+# Website/portal assets — loaded on EVERY web page
+web_include_js = "/assets/myapp/js/web.min.js"
+web_include_css = "/assets/myapp/css/web.min.css"
+
+# Web form specific assets
+webform_include_js = {"My Web Form": "public/js/my_webform.js"}
+webform_include_css = {"My Web Form": "public/css/my_webform.css"}
+
+# Form script extensions (extend OTHER apps' forms)
+doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
+
+# List view script extensions
+doctype_list_js = {"Sales Invoice": "public/js/sales_invoice_list.js"}
+
+# Custom sounds
+sounds = [{"name": "alert", "src": "/assets/myapp/sounds/alert.mp3", "volume": 0.5}]
+```
+
+NEVER put heavy libraries in `app_include_js` — they load on every page.
+
+---
+
+## 3. Installation & Migration Lifecycle
+
+```python
+before_install = "myapp.setup.before_install"
+after_install = "myapp.setup.after_install"
+after_sync = "myapp.setup.after_sync"            # After fixture sync
+before_migrate = "myapp.setup.before_migrate"
+after_migrate = "myapp.setup.after_migrate"
+before_uninstall = "myapp.setup.before_uninstall"
+after_uninstall = "myapp.setup.after_uninstall"
+before_tests = "myapp.setup.seed_test_data"
+```
+
+All accept a single dotted-path string. The function receives no arguments.
+
+---
+
+## 4. Scheduler Events
+
+See [scheduler-events.md](references/scheduler-events.md) for full reference.
+
+```python
 scheduler_events = {
-    "daily": ["myapp.tasks.daily_cleanup"],
-    "hourly_long": ["myapp.tasks.heavy_sync"],
+    "all": ["myapp.tasks.every_minute"],            # ~60s interval
+    "hourly": ["myapp.tasks.hourly_check"],         # default queue, 5 min timeout
+    "daily": ["myapp.tasks.daily_report"],
+    "weekly": ["myapp.tasks.weekly_cleanup"],
+    "monthly": ["myapp.tasks.monthly_summary"],
+    "daily_long": ["myapp.tasks.heavy_sync"],       # long queue, 25 min timeout
     "cron": {
-        "0 9 * * 1-5": ["myapp.tasks.weekday_morning"]
+        "0 9 * * 1-5": ["myapp.tasks.weekday_morning"]  # cron expression
     }
 }
 ```
 
-```python
-# In myapp/tasks.py
-def daily_cleanup():
-    """No arguments - called automatically"""
-    frappe.db.delete("Log", {"creation": ["<", one_month_ago()]})
-```
+ALWAYS run `bench --site sitename migrate` after changing scheduler_events.
+NEVER define task functions with arguments — they receive none.
 
-### extend_bootinfo - Client Data Injection
+---
+
+## 5. Session & Authentication Hooks
 
 ```python
-# In hooks.py
-extend_bootinfo = "myapp.boot.extend_boot"
+on_login = "myapp.auth.on_login"                     # Receives login_manager
+on_logout = "myapp.auth.on_logout"                   # No arguments
+on_session_creation = "myapp.auth.on_session_creation"  # No arguments
+auth_hooks = ["myapp.auth.validate_request"]          # List of validators
 ```
+
+Execution order: `on_login` --> session created --> `on_session_creation` --> `extend_bootinfo`.
+
+---
+
+## 6. Request/Response Middleware
 
 ```python
-# In myapp/boot.py
-def extend_boot(bootinfo):
-    """bootinfo = dict that goes to frappe.boot"""
-    bootinfo.my_setting = frappe.get_single("My Settings").value
-```
-
-```javascript
-// Client-side
-console.log(frappe.boot.my_setting);
+before_request = ["myapp.middleware.before_request"]   # List of dotted paths
+after_request = ["myapp.middleware.after_request"]
+before_job = ["myapp.middleware.before_job"]            # Before background job
+after_job = ["myapp.middleware.after_job"]              # After background job
 ```
 
 ---
 
-## Most Used doc_events
+## 7. Permission Hooks
 
-| Event | When | Use Case |
-|-------|------|----------|
-| `validate` | Before every save | Validation, calculations |
-| `on_update` | After every save | Notifications, sync |
-| `after_insert` | After new doc | Creation-only actions |
-| `on_submit` | After submit | Ledger entries |
-| `on_cancel` | After cancel | Reverse entries |
-| `on_trash` | Before delete | Cleanup |
-
-**Complete list**: See [doc-events.md](references/doc-events.md)
-
----
-
-## Scheduler Event Types
-
-| Event | Frequency | Queue/Timeout |
-|-------|-----------|---------------|
-| `hourly` | Every hour | default / 5 min |
-| `daily` | Every day | default / 5 min |
-| `weekly` | Every week | default / 5 min |
-| `monthly` | Every month | default / 5 min |
-| `hourly_long` | Every hour | long / 25 min |
-| `daily_long` | Every day | long / 25 min |
-| `cron` | Custom timing | default / 5 min |
-
-**Cron syntax and examples**: See [scheduler-events.md](references/scheduler-events.md)
-
----
-
-## Critical Rules
-
-### 1. bench migrate after scheduler changes
-
-```bash
-# REQUIRED - otherwise changes won't be picked up
-bench --site sitename migrate
-```
-
-### 2. No commits in doc_events
+See [permissions.md](references/permissions.md) for full reference.
 
 ```python
-# ❌ WRONG
-def on_update(doc, method=None):
-    frappe.db.commit()  # Breaks transaction
-
-# ✅ CORRECT - Frappe commits automatically
-def on_update(doc, method=None):
-    update_related_docs(doc)
-```
-
-### 3. Changes after on_update via db_set
-
-```python
-# ❌ WRONG - change is lost
-def on_update(doc, method=None):
-    doc.status = "Processed"
-
-# ✅ CORRECT
-def on_update(doc, method=None):
-    frappe.db.set_value(doc.doctype, doc.name, "status", "Processed")
-```
-
-### 4. Heavy tasks to _long queue
-
-```python
-# ❌ WRONG - timeout after 5 min
-scheduler_events = {
-    "daily": ["myapp.tasks.process_all_records"]  # May take 20 min
-}
-
-# ✅ CORRECT - 25 min timeout
-scheduler_events = {
-    "daily_long": ["myapp.tasks.process_all_records"]
-}
-```
-
-### 5. Tasks receive no arguments
-
-```python
-# ❌ WRONG
-def my_task(some_arg):
-    pass
-
-# ✅ CORRECT
-def my_task():
-    # Fetch data inside the function
-    pass
-```
-
----
-
-## Cron Syntax Cheatsheet
-
-```
-* * * * *
-│ │ │ │ │
-│ │ │ │ └── Day of week (0-6, Sun=0)
-│ │ │ └──── Month (1-12)
-│ │ └────── Day of month (1-31)
-│ └──────── Hour (0-23)
-└────────── Minute (0-59)
-```
-
-| Pattern | Meaning |
-|---------|---------|
-| `*/5 * * * *` | Every 5 minutes |
-| `0 9 * * *` | Daily at 09:00 |
-| `0 9 * * 1-5` | Weekdays at 09:00 |
-| `0 0 1 * *` | First day of month |
-| `0 17 * * 5` | Friday at 17:00 |
-
----
-
-## doc_events vs Controller Hooks
-
-| Aspect | doc_events (hooks.py) | Controller Methods |
-|--------|----------------------|-------------------|
-| Location | `hooks.py` | `doctype/xxx/xxx.py` |
-| Scope | Hook OTHER doctypes | Only OWN doctype |
-| Multiple handlers | ✅ Yes (list) | ❌ No |
-| Priority | After controller | First |
-| Wildcard (`*`) | ✅ Yes | ❌ No |
-
-**Use doc_events when**:
-- Hooking other apps' DocTypes from your custom app
-- Reacting to ALL DocTypes (wildcard)
-- Registering multiple handlers
-
-**Use controller methods when**:
-- Working on your own DocType
-- You want full lifecycle control
-
----
-
-## Reference Files
-
-| File | Contents |
-|------|----------|
-| [doc-events.md](references/doc-events.md) | All document events, signatures, execution order |
-| [scheduler-events.md](references/scheduler-events.md) | Scheduler types, cron syntax, timeouts |
-| [bootinfo.md](references/bootinfo.md) | extend_bootinfo, session hooks |
-| [overrides.md](references/overrides.md) | Override and extend patterns |
-| [permissions.md](references/permissions.md) | Permission hooks |
-| [fixtures.md](references/fixtures.md) | Fixtures configuration |
-| [examples.md](references/examples.md) | Complete hooks.py examples |
-| [anti-patterns.md](references/anti-patterns.md) | Mistakes and corrections |
-
----
-
-## Configuration Hooks
-
-### Override DocType Controller
-
-```python
-# In hooks.py
-override_doctype_class = {
-    "Sales Invoice": "myapp.overrides.CustomSalesInvoice"
-}
-```
-
-```python
-# In myapp/overrides.py
-from erpnext.accounts.doctype.sales_invoice.sales_invoice import SalesInvoice
-
-class CustomSalesInvoice(SalesInvoice):
-    def validate(self):
-        super().validate()  # CRITICAL: always call super()!
-        self.custom_validation()
-```
-
-**Warning**: Last installed app wins when multiple apps override the same DocType.
-
-### Override Whitelisted Methods
-
-```python
-# In hooks.py
-override_whitelisted_methods = {
-    "frappe.client.get_count": "myapp.overrides.custom_get_count"
-}
-```
-
-```python
-# Method signature MUST be identical to original!
-def custom_get_count(doctype, filters=None, debug=False, cache=False):
-    # Custom implementation
-    return frappe.db.count(doctype, filters)
-```
-
-### Permission Hooks
-
-```python
-# In hooks.py
 permission_query_conditions = {
     "Sales Invoice": "myapp.permissions.si_query_conditions"
 }
@@ -287,149 +213,220 @@ has_permission = {
 }
 ```
 
-```python
-# In myapp/permissions.py
-def si_query_conditions(user):
-    """Returns SQL WHERE fragment for list filtering"""
-    if not user:
-        user = frappe.session.user
-    
-    if "Sales Manager" in frappe.get_roles(user):
-        return ""  # No restrictions
-    
-    return f"`tabSales Invoice`.owner = {frappe.db.escape(user)}"
+ALWAYS check `if not user: user = frappe.session.user` in handlers.
+ALWAYS use `frappe.db.escape(user)` in SQL — NEVER string interpolation.
+`permission_query_conditions` works ONLY with `get_list`, NOT `get_all`.
 
-def si_has_permission(doc, user=None, permission_type=None):
-    """Document-level permission check"""
-    if permission_type == "write" and doc.status == "Closed":
-        return False
-    return None  # Fallback to default
+---
+
+## 8. DocType Class Overrides
+
+See [overrides.md](references/overrides.md) for full reference.
+
+```python
+# v14+ — Full replacement (LAST installed app wins)
+override_doctype_class = {
+    "Sales Invoice": "myapp.overrides.CustomSalesInvoice"
+}
+
+# v16+ — Mixin-based extension (ALL apps coexist) [RECOMMENDED]
+extend_doctype_class = {
+    "Address": ["myapp.extensions.AddressMixin"]
+}
 ```
 
-**Note**: `permission_query_conditions` only works with `get_list`, NOT with `get_all`!
+ALWAYS call `super().method()` in overrides. Forgetting super() breaks core logic.
 
-### Fixtures
+---
+
+## 9. Website & Portal Hooks
 
 ```python
-# In hooks.py
+# URL routing
+website_route_rules = [
+    {"from_route": "/custom-page/<name>", "to_route": "Custom Page"}
+]
+website_redirects = [
+    {"source": "/old-url", "target": "/new-url"}
+]
+website_catch_all = "myapp.www.custom_404"
+
+# Homepage
+homepage = "my-custom-home"
+role_home_page = {"Sales User": "sales-dashboard"}
+get_website_user_home_page = "myapp.utils.get_home_page"
+
+# Portal sidebar
+portal_menu_items = [{"title": "My Orders", "route": "/orders", "role": "Customer"}]
+standard_portal_menu_items = [{"title": "My Items", "route": "/my-items"}]
+
+# Template overrides
+base_template = "myapp/templates/base.html"
+website_context = {"brand_html": "<b>My Brand</b>"}
+update_website_context = "myapp.context.update_context"
+```
+
+---
+
+## 10. File Handling Hooks
+
+```python
+before_write_file = "myapp.files.before_write"      # Pre-save hook
+write_file = "myapp.files.custom_write"              # Replace file storage (e.g., S3/CDN)
+delete_file_data_content = "myapp.files.custom_delete"  # Replace file deletion
+```
+
+Use `write_file` to redirect file storage to cloud providers (S3, GCS, Azure Blob).
+
+---
+
+## 11. Email Hooks
+
+```python
+override_email_send = "myapp.email.custom_send"       # Replace email backend
+get_sender_details = "myapp.email.get_sender"          # Override From address
+default_mail_footer = "myapp.email.get_footer"         # HTML footer for all emails
+```
+
+---
+
+## 12. PDF Hooks
+
+```python
+pdf_header_html = "myapp.pdf.get_header"               # Custom PDF header
+pdf_body_html = "myapp.pdf.get_body"                    # Custom PDF body wrapper
+pdf_footer_html = "myapp.pdf.get_footer"                # Custom PDF footer
+# pdf_generator = "myapp.pdf.generate"                  # [v16+] Replace PDF engine
+```
+
+---
+
+## 13. Jinja Hooks
+
+```python
+# Add custom methods available in Jinja templates
+jinja = {
+    "methods": ["myapp.jinja_utils.get_balance"],
+    "filters": ["myapp.jinja_utils.format_iban"]
+}
+```
+
+```python
+# myapp/jinja_utils.py
+def get_balance(customer):
+    """Usage in template: {{ get_balance(doc.customer) }}"""
+    return frappe.db.get_value("Customer", customer, "outstanding_amount") or 0
+
+def format_iban(value):
+    """Usage in template: {{ bank_account|format_iban }}"""
+    if not value: return ""
+    return " ".join([value[i:i+4] for i in range(0, len(value), 4)])
+```
+
+---
+
+## 14. Boot & Client Data
+
+See [bootinfo.md](references/bootinfo.md) for full reference.
+
+```python
+extend_bootinfo = "myapp.boot.extend_boot"
+notification_config = "myapp.notifications.get_config"
+```
+
+NEVER put secrets/API keys in bootinfo — it is sent to the browser.
+NEVER run heavy queries in bootinfo — it runs on EVERY page load.
+
+---
+
+## 15. Data & Fixtures
+
+```python
 fixtures = [
     {"dt": "Custom Field", "filters": [["module", "=", "My App"]]},
     {"dt": "Property Setter", "filters": [["module", "=", "My App"]]},
     {"dt": "Role", "filters": [["name", "like", "MyApp%"]]}
 ]
+
+global_search_doctypes = {"My DocType": {"index": 10}}
+ignore_links_on_delete = ["Communication", "Activity Log"]
+calendars = ["My Event DocType"]
+clear_cache = "myapp.cache.clear_custom_cache"
 ```
 
-```bash
-# Export fixtures to JSON
-bench --site sitename export-fixtures
-```
-
-### Asset Includes
-
-```python
-# In hooks.py
-
-# Desk (backend) assets
-app_include_js = "/assets/myapp/js/myapp.min.js"
-app_include_css = "/assets/myapp/css/myapp.min.css"
-
-# Website/Portal assets
-web_include_js = "/assets/myapp/js/web.min.js"
-web_include_css = "/assets/myapp/css/web.min.css"
-
-# Form script extensions
-doctype_js = {
-    "Sales Invoice": "public/js/sales_invoice.js"
-}
-```
-
-### Install/Migrate Hooks
-
-```python
-# In hooks.py
-after_install = "myapp.setup.after_install"
-after_migrate = "myapp.setup.after_migrate"
-```
-
-```python
-# In myapp/setup.py
-def after_install():
-    create_default_roles()
-    
-def after_migrate():
-    clear_custom_cache()
-```
+ALWAYS use filters in fixtures — NEVER export unfiltered (exports everything).
+NEVER put transactional data (Sales Invoice, Stock Entry) in fixtures.
 
 ---
 
-## Complete Decision Tree
+## 16. Method Overrides
 
+See [overrides.md](references/overrides.md) for full reference.
+
+```python
+override_whitelisted_methods = {
+    "frappe.client.get_count": "myapp.overrides.custom_get_count"
+}
+standard_queries = {
+    "Customer": "myapp.queries.customer_query"
+}
 ```
-What do you want to achieve?
-│
-├─► REACT to document events from OTHER apps?
-│   └─► doc_events
-│
-├─► Run PERIODIC tasks?
-│   └─► scheduler_events
-│       ├─► < 5 min → hourly/daily/weekly/monthly
-│       ├─► > 5 min → hourly_long/daily_long/etc.
-│       └─► Specific time → cron
-│
-├─► Send DATA to CLIENT at page load?
-│   └─► extend_bootinfo
-│
-├─► Modify CONTROLLER of existing DocType?
-│   ├─► Frappe v16+ → extend_doctype_class (recommended)
-│   └─► Frappe v14/v15 → override_doctype_class
-│
-├─► Modify API ENDPOINT?
-│   └─► override_whitelisted_methods
-│
-├─► Customize PERMISSIONS?
-│   ├─► List filtering → permission_query_conditions
-│   └─► Document-level → has_permission
-│
-├─► EXPORT/IMPORT configuration?
-│   └─► fixtures
-│
-├─► ADD JS/CSS to desk or portal?
-│   ├─► Desk → app_include_js/css
-│   ├─► Portal → web_include_js/css
-│   └─► Form specific → doctype_js
-│
-└─► SETUP on install/migrate?
-    └─► after_install, after_migrate
-```
+
+ALWAYS match the original method signature exactly when overriding.
 
 ---
 
 ## Version Differences
 
-| Feature | v14 | v15 | v16 |
-|---------|-----|-----|-----|
-| doc_events | ✅ | ✅ | ✅ |
-| scheduler_events | ✅ | ✅ | ✅ |
-| extend_bootinfo | ✅ | ✅ | ✅ |
-| override_doctype_class | ✅ | ✅ | ✅ |
-| extend_doctype_class | ❌ | ❌ | ✅ |
-| permission_query_conditions | ✅ | ✅ | ✅ |
-| has_permission | ✅ | ✅ | ✅ |
-| fixtures | ✅ | ✅ | ✅ |
+| Hook | v14 | v15 | v16+ |
+|------|-----|-----|------|
+| `extend_doctype_class` | -- | -- | NEW |
+| `extend_bootinfo` | Yes | Yes | Yes |
+| `auth_hooks` | Yes | Yes | Yes |
+| `after_sync` | Yes | Yes | Yes |
+| `before_uninstall` | -- | Yes | Yes |
+| `after_uninstall` | -- | Yes | Yes |
+| `website_path_resolver` | -- | Yes | Yes |
+| All other hooks | Yes | Yes | Yes |
+
+---
+
+## Critical Rules
+
+1. ALWAYS run `bench --site sitename migrate` after ANY hooks.py change
+2. NEVER import frappe at module level in hooks.py — it runs before init
+3. ALWAYS use dotted paths (`"myapp.module.function"`) — NEVER lambdas
+4. NEVER commit in hook handlers — Frappe manages transactions
+5. ALWAYS test hooks in a dev environment before deploying
 
 ---
 
 ## Anti-Patterns Summary
 
-| ❌ Wrong | ✅ Correct |
-|----------|-----------|
-| `frappe.db.commit()` in handler | Frappe commits automatically |
-| `doc.field = x` in on_update | `frappe.db.set_value()` |
-| Heavy task in `daily` | Use `daily_long` |
-| Change scheduler without migrate | Always `bench migrate` |
-| Sensitive data in bootinfo | Only public config |
-| Override without `super()` | Always `super().method()` first |
-| `get_all` with permission_query | Use `get_list` |
-| Fixtures without filters | Filter by module/app |
+| Wrong | Correct |
+|-------|---------|
+| No filters in fixtures | ALWAYS filter by module/app |
+| Secrets in bootinfo | ONLY public config in bootinfo |
+| Heavy queries in bootinfo | Cache or minimize data |
+| `get_all` with permission hooks | Use `get_list` for permission filtering |
+| Override without `super()` | ALWAYS call `super().method()` first |
+| Scheduler tasks with args | Tasks receive NO arguments |
+| Skip `bench migrate` | ALWAYS migrate after hook changes |
 
-**Full anti-patterns**: See [anti-patterns.md](references/anti-patterns.md)
+Full anti-patterns: [anti-patterns.md](references/anti-patterns.md)
+
+---
+
+## Reference Files
+
+| File | Contents |
+|------|----------|
+| [hooks.md](references/hooks.md) | Complete hooks catalog by category |
+| [scheduler-events.md](references/scheduler-events.md) | Scheduler frequencies, cron syntax, timeouts |
+| [permissions.md](references/permissions.md) | Permission hooks in detail |
+| [overrides.md](references/overrides.md) | DocType class override patterns |
+| [bootinfo.md](references/bootinfo.md) | extend_bootinfo, session hooks, notification_config |
+| [examples.md](references/examples.md) | Working hooks.py examples for each category |
+| [anti-patterns.md](references/anti-patterns.md) | Common hook mistakes and corrections |
+
+For document lifecycle events (doc_events), see: **frappe-syntax-hooks-events**

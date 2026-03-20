@@ -1,72 +1,71 @@
 # Permission Hooks Reference
 
-Complete referentie voor permission hooks in hooks.py.
+Complete reference for permission hooks in hooks.py.
 
 ---
 
 ## permission_query_conditions
 
-Filter list views dynamisch op basis van user/role.
+Dynamically filter list views based on user/role. Returns a SQL WHERE fragment.
 
 ### Syntax
 
 ```python
-# In hooks.py
+# hooks.py
 permission_query_conditions = {
     "Sales Invoice": "myapp.permissions.si_query_conditions",
-    "ToDo": "myapp.permissions.todo_query_conditions",
     "Project": "myapp.permissions.project_query_conditions"
 }
 ```
 
-### Handler Implementatie
+### Handler Signature
 
 ```python
-# In myapp/permissions.py
+def si_query_conditions(user):
+    """
+    Args:
+        user: str or None — ALWAYS check for None
+
+    Returns:
+        str: SQL WHERE fragment (without WHERE keyword)
+             "" = no restrictions (show all)
+             "1=0" = show nothing
+    """
+```
+
+### Implementation Example
+
+```python
 import frappe
 
 def si_query_conditions(user):
-    """
-    Retourneert een SQL WHERE clause fragment.
-    
-    Args:
-        user: kan None zijn - controleer dit ALTIJD!
-    
-    Returns:
-        str: SQL WHERE fragment (zonder WHERE keyword)
-             "" = geen restricties
-             "1=0" = niets tonen
-    """
     if not user:
         user = frappe.session.user
-    
-    # Administrator ziet alles
+
     if user == "Administrator":
         return ""
-    
+
     roles = frappe.get_roles(user)
-    
-    # Sales Manager ziet alles
+
     if "Sales Manager" in roles:
         return ""
-    
-    # Sales User ziet alleen eigen facturen
+
     if "Sales User" in roles:
         return f"`tabSales Invoice`.owner = {frappe.db.escape(user)}"
-    
-    # Anderen zien niets
+
     return "1=0"
+```
 
+### Subquery Example
 
+```python
 def project_query_conditions(user):
-    """Voorbeeld: filter op basis van project members"""
     if not user:
         user = frappe.session.user
-    
+
     if "Projects Manager" in frappe.get_roles(user):
         return ""
-    
-    # Alleen projecten waar user member is
+
     return f"""
         `tabProject`.name IN (
             SELECT parent FROM `tabProject User`
@@ -75,20 +74,14 @@ def project_query_conditions(user):
     """
 ```
 
-### ⚠️ KRITIEK: get_list vs get_all
+### CRITICAL: get_list vs get_all
 
-| Method | permission_query_conditions | Gedrag |
-|--------|----------------------------|--------|
-| `frappe.db.get_list` | ✅ Toegepast | Respecteert permissions |
-| `frappe.db.get_all` | ❌ NIET toegepast | Negeert permissions |
+| Method | Applies permission_query_conditions | Behavior |
+|--------|-------------------------------------|----------|
+| `frappe.db.get_list` | YES | Respects permissions |
+| `frappe.db.get_all` | NO | Ignores permissions entirely |
 
-```python
-# Respecteert permission_query_conditions
-frappe.db.get_list("Sales Invoice", filters={"status": "Unpaid"})
-
-# NEGEERT permission_query_conditions - toont ALLES
-frappe.db.get_all("Sales Invoice", filters={"status": "Unpaid"})
-```
+ALWAYS use `frappe.db.get_list` when permission filtering is required.
 
 ---
 
@@ -99,118 +92,96 @@ Custom document-level permission logic.
 ### Syntax
 
 ```python
-# In hooks.py
+# hooks.py
 has_permission = {
     "Sales Invoice": "myapp.permissions.si_has_permission",
-    "Event": "myapp.permissions.event_has_permission",
-    "Project": "myapp.permissions.project_has_permission"
+    "Event": "myapp.permissions.event_has_permission"
 }
 ```
 
-### Handler Implementatie
+### Handler Signature
 
 ```python
-# In myapp/permissions.py
-
 def si_has_permission(doc, user=None, permission_type=None):
     """
-    Document-level permission check.
-    
     Args:
-        doc: het document object
-        user: de user (kan None zijn, gebruik dan frappe.session.user)
-        permission_type: "read", "write", "submit", "cancel", "delete", etc.
-    
+        doc: Document object
+        user: str or None — ALWAYS check for None
+        permission_type: "read", "write", "create", "delete",
+                         "submit", "cancel", "amend", "print",
+                         "email", "share"
+
     Returns:
-        True: toegang verlenen
-        False: toegang weigeren
-        None: fallback naar default permission check
+        True: Grant access
+        False: Deny access
+        None: Fallback to default permission check
     """
+```
+
+### Implementation Example
+
+```python
+def si_has_permission(doc, user=None, permission_type=None):
     if not user:
         user = frappe.session.user
-    
-    # Gesloten facturen kunnen niet bewerkt worden
+
+    # Closed invoices CANNOT be edited
     if permission_type == "write" and doc.status == "Closed":
         return False
-    
-    # Geannuleerde facturen kunnen niet verwijderd worden
+
+    # Cancelled invoices CANNOT be deleted
     if permission_type == "delete" and doc.docstatus == 2:
         return False
-    
-    # Fallback naar standaard permissions
+
+    # Fallback to standard permissions
     return None
 
 
 def event_has_permission(doc, user=None, permission_type=None):
-    """Voorbeeld: public events zijn leesbaar voor iedereen"""
     if not user:
         user = frappe.session.user
-    
-    # Public events zijn voor iedereen leesbaar
+
     if permission_type == "read" and doc.event_type == "Public":
         return True
-    
-    # Private events alleen voor owner
-    if doc.event_type == "Private":
-        if doc.owner == user:
-            return True
+
+    if doc.event_type == "Private" and doc.owner != user:
         return False
-    
-    return None
 
-
-def project_has_permission(doc, user=None, permission_type=None):
-    """Voorbeeld: project members hebben toegang"""
-    if not user:
-        user = frappe.session.user
-    
-    # Check of user project member is
-    is_member = frappe.db.exists("Project User", {
-        "parent": doc.name,
-        "user": user
-    })
-    
-    if permission_type == "read" and is_member:
-        return True
-    
-    if permission_type == "write" and doc.project_manager == user:
-        return True
-    
     return None
 ```
 
-### Permission Types
+### All Permission Types
 
-| Type | Wanneer Gecheckt |
-|------|------------------|
-| `read` | Document openen, list view |
-| `write` | Document bewerken |
-| `create` | Nieuw document maken |
-| `delete` | Document verwijderen |
-| `submit` | Document submitten |
-| `cancel` | Document cancelen |
-| `amend` | Document amenderen |
-| `print` | Document printen |
-| `email` | Document emailen |
-| `share` | Document delen |
+| Type | When Checked |
+|------|-------------|
+| `read` | Opening document, list view |
+| `write` | Editing document |
+| `create` | Creating new document |
+| `delete` | Deleting document |
+| `submit` | Submitting document |
+| `cancel` | Cancelling document |
+| `amend` | Amending document |
+| `print` | Printing document |
+| `email` | Emailing document |
+| `share` | Sharing document |
 
 ---
 
-## Combineren van Permission Hooks
-
-### Volgorde van Evaluatie
+## Evaluation Order
 
 ```
 1. has_permission hook (document-level)
-   ↓
+   |
 2. Role Permissions (DocType level)
-   ↓
+   |
 3. User Permissions (field-level restrictions)
-   ↓
-4. permission_query_conditions (list filtering)
+   |
+4. permission_query_conditions (list filtering only)
 ```
 
-### Voorbeeld: Complete Permission Setup
+---
+
+## Combined Example
 
 ```python
 # hooks.py
@@ -222,59 +193,57 @@ has_permission = {
 }
 
 # myapp/permissions.py
+import frappe
+
 def si_query(user):
-    """List view filter"""
+    """List view filter — controls what appears in lists."""
     if not user:
         user = frappe.session.user
-    
+
     if "Accounts Manager" in frappe.get_roles(user):
         return ""
-    
-    # Toon alleen facturen van eigen company
+
     default_company = frappe.defaults.get_user_default("Company")
     if default_company:
         return f"`tabSales Invoice`.company = {frappe.db.escape(default_company)}"
-    
+
     return "1=0"
 
 
 def si_permission(doc, user=None, permission_type=None):
-    """Document-level check"""
+    """Document-level check — controls access to individual documents."""
     if not user:
         user = frappe.session.user
-    
-    # Extra check: submitted invoices niet bewerken
+
     if permission_type == "write" and doc.docstatus == 1:
         return False
-    
+
     return None
 ```
 
 ---
 
-## Debugging Permissions
+## Critical Rules
 
-### In Code
+1. ALWAYS check `if not user: user = frappe.session.user`
+2. ALWAYS use `frappe.db.escape(user)` for SQL values — NEVER raw interpolation
+3. ALWAYS return `None` (not `True`) to fallback to standard permissions
+4. NEVER use `get_all` when you need permission filtering — use `get_list`
+5. ALWAYS return `""` (empty string) for "no restrictions" in query conditions
+
+---
+
+## Debugging
 
 ```python
-# Check of user permission heeft
+# Check if user has permission
 has_perm = frappe.has_permission("Sales Invoice", "read", doc=invoice)
 
-# Get alle permissions voor een doctype
-perms = frappe.permissions.get_doc_permissions(doc)
-
-# Debug output
-print(frappe.permissions.get_user_perms("Sales Invoice", user))
-```
-
-### Bench Console
-
-```python
-# Test permission_query_conditions
+# Test query conditions directly
 from myapp.permissions import si_query_conditions
 print(si_query_conditions("user@example.com"))
 
-# Test has_permission
+# Test has_permission directly
 doc = frappe.get_doc("Sales Invoice", "SI-00001")
 from myapp.permissions import si_has_permission
 print(si_has_permission(doc, "user@example.com", "write"))
@@ -282,35 +251,10 @@ print(si_has_permission(doc, "user@example.com", "write"))
 
 ---
 
-## Best Practices
+## Version Differences
 
-### ✅ DO
-
-```python
-def my_query_conditions(user):
-    # Altijd user None check
-    if not user:
-        user = frappe.session.user
-    
-    # Gebruik frappe.db.escape voor SQL injection preventie
-    return f"owner = {frappe.db.escape(user)}"
-```
-
-### ❌ DON'T
-
-```python
-def my_query_conditions(user):
-    # FOUT: Geen None check
-    # FOUT: SQL injection kwetsbaar
-    return f"owner = '{user}'"
-```
-
----
-
-## Versie Verschillen
-
-| Feature | v14 | v15 |
-|---------|-----|-----|
-| permission_query_conditions | ✅ | ✅ |
-| has_permission | ✅ | ✅ |
-| Werkt alleen met get_list | ✅ | ✅ |
+| Feature | v14 | v15 | v16 |
+|---------|-----|-----|-----|
+| permission_query_conditions | Yes | Yes | Yes |
+| has_permission | Yes | Yes | Yes |
+| Only works with get_list | Yes | Yes | Yes |

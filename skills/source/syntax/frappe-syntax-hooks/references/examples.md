@@ -1,13 +1,13 @@
-# Complete hooks.py Voorbeelden
+# Complete hooks.py Examples
 
-Praktische voorbeelden van complete hooks.py configuraties.
+Working examples for each hook category. For `doc_events` examples, see the
+**frappe-syntax-hooks-events** skill.
 
 ---
 
-## Minimale hooks.py
+## Minimal hooks.py
 
 ```python
-# Minimale hooks.py voor een nieuwe app
 app_name = "myapp"
 app_title = "My App"
 app_publisher = "My Company"
@@ -18,9 +18,7 @@ app_license = "MIT"
 
 ---
 
-## Standaard Business App
-
-Complete hooks.py voor een typische business app:
+## Standard Business App hooks.py
 
 ```python
 app_name = "myapp"
@@ -33,26 +31,18 @@ app_license = "MIT"
 required_apps = ["erpnext"]
 
 # ============================================================
-# Document Events - React op CRUD operaties
+# Frontend Assets
 # ============================================================
-doc_events = {
-    # Wildcard - alle DocTypes
-    "*": {
-        "after_insert": "myapp.audit.log_creation"
-    },
-    # Sales Invoice specifiek
-    "Sales Invoice": {
-        "validate": "myapp.events.sales_invoice.validate",
-        "on_submit": "myapp.events.sales_invoice.on_submit",
-        "on_cancel": "myapp.events.sales_invoice.on_cancel"
-    },
-    # Sales Order
-    "Sales Order": {
-        "validate": [
-            "myapp.events.sales_order.check_credit_limit",
-            "myapp.events.sales_order.validate_items"
-        ]
-    }
+app_include_js = "/assets/myapp/js/myapp.min.js"
+app_include_css = "/assets/myapp/css/myapp.min.css"
+
+doctype_js = {
+    "Sales Invoice": "public/js/sales_invoice.js",
+    "Customer": "public/js/customer.js"
+}
+
+doctype_list_js = {
+    "Sales Invoice": "public/js/sales_invoice_list.js"
 }
 
 # ============================================================
@@ -76,6 +66,7 @@ scheduler_events = {
 # Client-Side Data
 # ============================================================
 extend_bootinfo = "myapp.boot.extend_boot"
+notification_config = "myapp.notifications.get_config"
 
 # ============================================================
 # Custom Permissions
@@ -88,7 +79,7 @@ has_permission = {
 }
 
 # ============================================================
-# Fixtures - Configuratie Export
+# Fixtures
 # ============================================================
 fixtures = [
     {"dt": "Custom Field", "filters": [["module", "=", "My App"]]},
@@ -98,206 +89,68 @@ fixtures = [
 ]
 
 # ============================================================
-# Assets
+# Install / Migrate
 # ============================================================
-app_include_js = "/assets/myapp/js/myapp.min.js"
-app_include_css = "/assets/myapp/css/myapp.min.css"
+after_install = "myapp.setup.after_install"
+after_migrate = "myapp.setup.after_migrate"
 
 # ============================================================
-# Form Script Extensions
+# Jinja Extensions
 # ============================================================
-doctype_js = {
-    "Sales Invoice": "public/js/sales_invoice.js",
-    "Customer": "public/js/customer.js"
+jinja = {
+    "methods": ["myapp.jinja_utils.get_customer_balance"],
+    "filters": ["myapp.jinja_utils.format_iban"]
 }
 ```
 
 ---
 
-## Event Handler Bestanden
-
-### myapp/events/sales_invoice.py
+## Setup Module (myapp/setup.py)
 
 ```python
 import frappe
-from frappe import _
 
-def validate(doc, method=None):
-    """Validatie voor Sales Invoice"""
-    validate_minimum_margin(doc)
-    calculate_commission(doc)
+def after_install():
+    """Post-installation setup. No arguments."""
+    create_default_roles()
+    create_default_settings()
 
-def validate_minimum_margin(doc):
-    """Check minimum marge"""
-    if doc.grand_total > 0:
-        margin = (doc.grand_total - doc.total_cost) / doc.grand_total * 100
-        if margin < 10:
-            frappe.throw(_("Minimum margin of 10% required"))
+def create_default_roles():
+    roles = ["MyApp User", "MyApp Manager"]
+    for role in roles:
+        if not frappe.db.exists("Role", role):
+            frappe.get_doc({
+                "doctype": "Role",
+                "role_name": role
+            }).insert()
 
-def calculate_commission(doc):
-    """Bereken sales commission"""
-    if doc.sales_person:
-        commission_rate = frappe.db.get_value(
-            "Sales Person", doc.sales_person, "commission_rate"
-        ) or 0
-        doc.commission_amount = doc.grand_total * commission_rate / 100
-
-def on_submit(doc, method=None):
-    """Na submit van Sales Invoice"""
-    create_commission_entry(doc)
-    notify_accounts_team(doc)
-
-def create_commission_entry(doc):
-    """Maak commission journal entry"""
-    if doc.commission_amount > 0:
+def create_default_settings():
+    if not frappe.db.exists("My App Settings"):
         frappe.get_doc({
-            "doctype": "Commission Entry",
-            "sales_invoice": doc.name,
-            "sales_person": doc.sales_person,
-            "amount": doc.commission_amount
-        }).insert(ignore_permissions=True)
+            "doctype": "My App Settings",
+            "enable_feature_x": 1
+        }).insert()
 
-def notify_accounts_team(doc):
-    """Notificeer accounts bij grote facturen"""
-    if doc.grand_total > 50000:
-        frappe.sendmail(
-            recipients=["accounts@mycompany.com"],
-            subject=f"Large Invoice Submitted: {doc.name}",
-            message=f"Invoice {doc.name} for {doc.grand_total} has been submitted."
-        )
-
-def on_cancel(doc, method=None):
-    """Bij cancel: cleanup gerelateerde docs"""
-    # Cancel commission entries
-    commission_entries = frappe.get_all(
-        "Commission Entry",
-        filters={"sales_invoice": doc.name}
-    )
-    for entry in commission_entries:
-        frappe.delete_doc("Commission Entry", entry.name)
+def after_migrate():
+    """Runs after every bench migrate. No arguments."""
+    frappe.cache().delete_key("myapp_config")
 ```
 
-### myapp/tasks.py
+---
 
-```python
-import frappe
-from frappe.utils import today, add_days, getdate
-
-def send_daily_digest():
-    """Stuur dagelijkse samenvatting naar sales team"""
-    users = frappe.get_all(
-        "User",
-        filters={"enabled": 1, "user_type": "System User"},
-        fields=["name", "email"]
-    )
-    
-    for user in users:
-        if "Sales User" in frappe.get_roles(user.name):
-            digest = compile_sales_digest(user.name)
-            if digest:
-                frappe.sendmail(
-                    recipients=[user.email],
-                    subject=f"Daily Sales Digest - {today()}",
-                    message=digest
-                )
-
-def compile_sales_digest(user):
-    """Compile digest voor specifieke user"""
-    pending_orders = frappe.db.count(
-        "Sales Order",
-        {"owner": user, "status": "Draft"}
-    )
-    todays_invoices = frappe.db.count(
-        "Sales Invoice",
-        {"owner": user, "posting_date": today()}
-    )
-    
-    if pending_orders or todays_invoices:
-        return f"""
-        <h3>Your Daily Summary</h3>
-        <ul>
-            <li>Pending Orders: {pending_orders}</li>
-            <li>Today's Invoices: {todays_invoices}</li>
-        </ul>
-        """
-    return None
-
-def cleanup_old_logs():
-    """Verwijder logs ouder dan 30 dagen"""
-    cutoff_date = add_days(today(), -30)
-    
-    frappe.db.delete(
-        "Activity Log",
-        {"creation": ["<", cutoff_date]}
-    )
-    frappe.db.commit()
-
-def sync_external_system():
-    """Sync met extern systeem (long running)"""
-    # Dit kan lang duren, dus daily_long gebruiken
-    pending_records = frappe.get_all(
-        "Sync Queue",
-        filters={"status": "Pending"},
-        limit=1000
-    )
-    
-    for record in pending_records:
-        try:
-            process_sync(record.name)
-            frappe.db.set_value("Sync Queue", record.name, "status", "Completed")
-        except Exception:
-            frappe.db.set_value("Sync Queue", record.name, "status", "Failed")
-            frappe.log_error(
-                title=f"Sync Failed: {record.name}",
-                message=frappe.get_traceback()
-            )
-        
-        # Commit per record om memory te sparen
-        frappe.db.commit()
-
-def weekday_morning_report():
-    """Weekdag ochtend rapport om 9:00"""
-    # Wordt alleen ma-vr om 9:00 uitgevoerd (cron: 0 9 * * 1-5)
-    yesterday = add_days(today(), -1)
-    
-    report = generate_daily_report(yesterday)
-    
-    frappe.sendmail(
-        recipients=["management@mycompany.com"],
-        subject=f"Daily Business Report - {yesterday}",
-        message=report
-    )
-
-def weekly_summary():
-    """Wekelijkse samenvatting vrijdag 17:00"""
-    week_start = add_days(today(), -7)
-    
-    summary = generate_weekly_summary(week_start, today())
-    
-    frappe.sendmail(
-        recipients=["management@mycompany.com"],
-        subject=f"Weekly Summary - Week ending {today()}",
-        message=summary
-    )
-```
-
-### myapp/boot.py
+## Boot Module (myapp/boot.py)
 
 ```python
 import frappe
 
 def extend_boot(bootinfo):
-    """Voeg app-specifieke data toe aan frappe.boot"""
-    
-    # App versie
+    """Inject app-specific data into frappe.boot."""
     bootinfo.myapp_version = frappe.get_module("myapp").__version__
-    
-    # User-specifieke settings
+
     if frappe.session.user != "Guest":
         bootinfo.myapp_settings = get_user_settings()
         bootinfo.feature_flags = get_feature_flags()
-    
-    # Company defaults
+
     default_company = frappe.defaults.get_user_default("Company")
     if default_company:
         bootinfo.company_config = frappe.db.get_value(
@@ -308,82 +161,176 @@ def extend_boot(bootinfo):
         )
 
 def get_user_settings():
-    """Haal user-specifieke settings op"""
     user = frappe.session.user
-    
     return {
-        "dashboard_layout": frappe.db.get_value("User", user, "dashboard_layout") or "default",
-        "notification_preferences": get_notification_prefs(user)
+        "dashboard_layout": frappe.db.get_value(
+            "User", user, "dashboard_layout"
+        ) or "default"
     }
 
 def get_feature_flags():
-    """Feature flags voor conditional UI"""
     settings = frappe.get_single("My App Settings")
-    
     return {
         "new_dashboard": settings.enable_new_dashboard,
-        "beta_features": settings.enable_beta,
-        "advanced_reports": settings.enable_advanced_reports
+        "beta_features": settings.enable_beta
     }
-
-def get_notification_prefs(user):
-    """Notification preferences"""
-    return frappe.db.get_value(
-        "Notification Settings",
-        user,
-        ["email_notifications", "push_notifications"],
-        as_dict=True
-    ) or {}
 ```
 
-### myapp/permissions.py
+---
+
+## Tasks Module (myapp/tasks.py)
+
+```python
+import frappe
+from frappe.utils import today, add_days
+
+def send_daily_digest():
+    """Daily digest for sales team. No arguments."""
+    users = frappe.get_all(
+        "User",
+        filters={"enabled": 1, "user_type": "System User"},
+        fields=["name", "email"]
+    )
+    for user in users:
+        if "Sales User" in frappe.get_roles(user.name):
+            digest = compile_digest(user.name)
+            if digest:
+                frappe.sendmail(
+                    recipients=[user.email],
+                    subject=f"Daily Sales Digest - {today()}",
+                    message=digest
+                )
+
+def cleanup_old_logs():
+    """Remove logs older than 30 days. No arguments."""
+    cutoff = add_days(today(), -30)
+    frappe.db.delete("Activity Log", {"creation": ["<", cutoff]})
+    frappe.db.commit()
+
+def sync_external_system():
+    """Long running sync. Use daily_long. No arguments."""
+    records = frappe.get_all(
+        "Sync Queue",
+        filters={"status": "Pending"},
+        limit=1000
+    )
+    for record in records:
+        try:
+            process_sync(record.name)
+            frappe.db.set_value("Sync Queue", record.name, "status", "Completed")
+        except Exception:
+            frappe.db.set_value("Sync Queue", record.name, "status", "Failed")
+            frappe.log_error(
+                title=f"Sync Failed: {record.name}",
+                message=frappe.get_traceback()
+            )
+        frappe.db.commit()  # Commit per record
+
+def weekday_morning_report():
+    """Cron: 0 9 * * 1-5. No arguments."""
+    yesterday = add_days(today(), -1)
+    report = generate_daily_report(yesterday)
+    frappe.sendmail(
+        recipients=["management@mycompany.com"],
+        subject=f"Daily Business Report - {yesterday}",
+        message=report
+    )
+```
+
+---
+
+## Permissions Module (myapp/permissions.py)
 
 ```python
 import frappe
 
 def si_query_conditions(user):
-    """Filter Sales Invoices in list view"""
+    """Filter Sales Invoices in list view."""
     if not user:
         user = frappe.session.user
-    
+
     if user == "Administrator":
         return ""
-    
+
     roles = frappe.get_roles(user)
-    
+
     if "Accounts Manager" in roles:
         return ""
-    
+
     if "Accounts User" in roles:
-        # Alleen eigen company
         company = frappe.defaults.get_user_default("Company")
         if company:
             return f"`tabSales Invoice`.company = {frappe.db.escape(company)}"
-    
+
     if "Sales User" in roles:
-        # Alleen eigen facturen
         return f"`tabSales Invoice`.owner = {frappe.db.escape(user)}"
-    
+
     return "1=0"
 
 def si_has_permission(doc, user=None, permission_type=None):
-    """Document-level permission voor Sales Invoice"""
+    """Document-level permission for Sales Invoice."""
     if not user:
         user = frappe.session.user
-    
-    # Closed invoices kunnen niet bewerkt worden
+
     if permission_type == "write" and doc.status == "Closed":
         return False
-    
-    # Fallback naar standaard
+
     return None
 ```
 
 ---
 
-## DocType Override Voorbeeld
+## Jinja Utilities (myapp/jinja_utils.py)
 
-hooks.py met controller override:
+```python
+import frappe
+
+def get_customer_balance(customer):
+    """Usage in template: {{ get_customer_balance(doc.customer) }}"""
+    return frappe.db.get_value(
+        "Customer", customer, "outstanding_amount"
+    ) or 0
+
+def format_iban(value):
+    """Usage in template: {{ bank_account|format_iban }}"""
+    if not value:
+        return ""
+    return " ".join([value[i:i+4] for i in range(0, len(value), 4)])
+```
+
+---
+
+## Website Hooks Example
+
+```python
+# hooks.py additions for website/portal
+website_route_rules = [
+    {"from_route": "/my-orders/<name>", "to_route": "My Order"}
+]
+
+portal_menu_items = [
+    {"title": "My Orders", "route": "/my-orders", "role": "Customer"}
+]
+
+role_home_page = {
+    "Customer": "my-orders",
+    "Supplier": "my-rfqs"
+}
+
+update_website_context = "myapp.context.update_context"
+```
+
+```python
+# myapp/context.py
+def update_context(context):
+    """Add dynamic values to website context."""
+    context.app_version = "1.0.0"
+    context.support_email = "support@mycompany.com"
+```
+
+---
+
+## DocType Override Example (v14/v15)
 
 ```python
 # hooks.py
@@ -398,133 +345,36 @@ from erpnext.accounts.doctype.sales_invoice.sales_invoice import SalesInvoice
 
 class CustomSalesInvoice(SalesInvoice):
     def validate(self):
-        # ALTIJD super() eerst!
-        super().validate()
-        
-        # Custom validatie
+        super().validate()  # ALWAYS call super() first
         self.validate_customer_status()
-        self.apply_special_discount()
-    
+
     def validate_customer_status(self):
-        """Blokkeer facturen voor geblokeerde klanten"""
-        customer_status = frappe.db.get_value(
-            "Customer", self.customer, "status"
-        )
-        if customer_status == "Blocked":
+        status = frappe.db.get_value("Customer", self.customer, "status")
+        if status == "Blocked":
             frappe.throw(f"Cannot create invoice for blocked customer {self.customer}")
-    
-    def apply_special_discount(self):
-        """Automatische korting voor VIP klanten"""
-        is_vip = frappe.db.get_value("Customer", self.customer, "is_vip")
-        if is_vip and not self.discount_amount:
-            self.discount_amount = self.grand_total * 0.05  # 5% VIP korting
 ```
 
 ---
 
-## Jinja Extensions Voorbeeld
+## DocType Extension Example (v16+)
 
 ```python
 # hooks.py
-jenv = {
-    "methods": [
-        "myapp.jinja.methods"
-    ],
-    "filters": [
-        "myapp.jinja.filters"
-    ]
+extend_doctype_class = {
+    "Address": ["myapp.extensions.AddressMixin"]
 }
 ```
 
 ```python
-# myapp/jinja/methods.py
+# myapp/extensions.py
+import re
 import frappe
+from frappe.model.document import Document
 
-def get_customer_balance(customer):
-    """Gebruik in template: {{ get_customer_balance(doc.customer) }}"""
-    return frappe.db.get_value(
-        "Customer", customer, "outstanding_amount"
-    ) or 0
-
-def format_address(address_name):
-    """Gebruik: {{ format_address(doc.customer_address) }}"""
-    if not address_name:
-        return ""
-    
-    address = frappe.get_doc("Address", address_name)
-    parts = [
-        address.address_line1,
-        address.address_line2,
-        f"{address.pincode} {address.city}",
-        address.country
-    ]
-    return "\n".join(filter(None, parts))
-```
-
-```python
-# myapp/jinja/filters.py
-def format_iban(value):
-    """Gebruik in template: {{ bank_account | format_iban }}"""
-    if not value:
-        return ""
-    # NL12 ABCD 0123 4567 89
-    return " ".join([value[i:i+4] for i in range(0, len(value), 4)])
-
-def highlight_negative(value):
-    """Gebruik: {{ amount | highlight_negative }}"""
-    if value < 0:
-        return f'<span class="text-danger">{value}</span>'
-    return str(value)
-```
-
----
-
-## Install/Migrate Hooks
-
-```python
-# hooks.py
-before_install = "myapp.setup.before_install"
-after_install = "myapp.setup.after_install"
-after_migrate = "myapp.setup.after_migrate"
-```
-
-```python
-# myapp/setup.py
-import frappe
-
-def before_install():
-    """Check prerequisites"""
-    # Verify ERPNext version
-    pass
-
-def after_install():
-    """Post-installation setup"""
-    create_default_roles()
-    create_default_settings()
-
-def create_default_roles():
-    """Maak app-specifieke roles"""
-    roles = ["MyApp User", "MyApp Manager"]
-    for role in roles:
-        if not frappe.db.exists("Role", role):
-            frappe.get_doc({
-                "doctype": "Role",
-                "role_name": role
-            }).insert()
-
-def create_default_settings():
-    """Initialiseer settings"""
-    if not frappe.db.exists("My App Settings"):
-        frappe.get_doc({
-            "doctype": "My App Settings",
-            "enable_feature_x": 1
-        }).insert()
-
-def after_migrate():
-    """Na elke migrate"""
-    clear_custom_cache()
-
-def clear_custom_cache():
-    """Clear app-specifieke cache"""
-    frappe.cache().delete_key("myapp_config")
+class AddressMixin(Document):
+    def validate(self):
+        super().validate()
+        if self.country == "Netherlands" and self.pincode:
+            if not re.match(r'^\d{4}\s?[A-Z]{2}$', self.pincode):
+                frappe.throw("Invalid Dutch postal code")
 ```

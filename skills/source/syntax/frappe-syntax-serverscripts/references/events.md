@@ -1,22 +1,15 @@
-# Server Script Events - Complete Reference
-
-## Table of Contents
-
-1. [Event Name Mapping](#event-name-mapping)
-2. [Document Lifecycle Order](#document-lifecycle-order)
-3. [Event Details](#event-details)
-4. [Special Events](#special-events)
-
----
+# Server Script Events — Complete Reference
 
 ## Event Name Mapping
 
 ### CRITICAL: UI Names vs Internal Hooks
 
-The Server Script UI displays different event names than the internal Frappe hooks. This is essential to understand for correct operation:
+The Server Script UI displays different labels than the internal Frappe hook
+names. ALWAYS use the UI label when configuring; the framework maps it
+internally.
 
 | Server Script UI | Internal Hook | Controller Method |
-|------------------|---------------|-------------------|
+|---|---|---|
 | Before Insert | `before_insert` | `before_insert()` |
 | After Insert | `after_insert` | `after_insert()` |
 | Before Validate | `before_validate` | `before_validate()` |
@@ -29,70 +22,71 @@ The Server Script UI displays different event names than the internal Frappe hoo
 | Before Delete | `on_trash` | `on_trash()` |
 | After Delete | `after_delete` | `after_delete()` |
 
-### Why "Before Save" = `validate`?
+### Why "Before Save" Maps to `validate`
 
 In Frappe's architecture:
 - `validate` is the primary hook for pre-save validation and calculations
-- `before_save` also exists but runs AFTER `validate`
-- The UI chose "Before Save" as a more intuitive name for `validate`
+- `before_save` is a separate hook that runs AFTER `validate`
+- The Server Script UI uses "Before Save" as a user-friendly label for `validate`
+- NEVER confuse the UI label with the actual `before_save` hook
 
 ---
 
-## Document Lifecycle Order
+## Document Lifecycle — Execution Order
 
 ### New Document Insert
 
 ```
-1. before_insert      ← "Before Insert"
-2. before_naming
-3. autoname
-4. before_validate    ← "Before Validate"
-5. validate           ← "Before Save" ⚠️
-6. before_save
-7. [DB INSERT]
-8. after_insert       ← "After Insert"
-9. on_update          ← "After Save"
-10. on_change
+1.  before_insert       ← Server Script: "Before Insert"
+2.  before_naming       ← NOT available in Server Scripts
+3.  autoname            ← NOT available in Server Scripts
+4.  before_validate     ← Server Script: "Before Validate"
+5.  validate            ← Server Script: "Before Save"
+6.  before_save         ← NOT available in Server Scripts
+7.  [DB INSERT]
+8.  after_insert        ← Server Script: "After Insert"
+9.  on_update           ← Server Script: "After Save"
+10. on_change           ← NOT available in Server Scripts
 ```
 
 ### Existing Document Update
 
 ```
-1. before_validate    ← "Before Validate"
-2. validate           ← "Before Save" ⚠️
-3. before_save
-4. [DB UPDATE]
-5. on_update          ← "After Save"
-6. on_change
+1.  before_validate     ← Server Script: "Before Validate"
+2.  validate            ← Server Script: "Before Save"
+3.  before_save         ← NOT available in Server Scripts
+4.  [DB UPDATE]
+5.  on_update           ← Server Script: "After Save"
+6.  on_change           ← NOT available in Server Scripts
 ```
 
-### Document Submit
+### Document Submit (docstatus 0 → 1)
 
 ```
-1. before_validate    ← "Before Validate"
-2. validate           ← "Before Save" ⚠️
-3. before_submit      ← "Before Submit"
-4. [DB UPDATE: docstatus=1]
-5. on_update          ← "After Save"
-6. on_submit          ← "After Submit"
-7. on_change
+1.  before_validate     ← Server Script: "Before Validate"
+2.  validate            ← Server Script: "Before Save"
+3.  before_submit       ← Server Script: "Before Submit"
+4.  [DB UPDATE: docstatus = 1]
+5.  on_update           ← Server Script: "After Save"
+6.  on_submit           ← Server Script: "After Submit"
+7.  on_change           ← NOT available in Server Scripts
 ```
 
-### Document Cancel
+### Document Cancel (docstatus 1 → 2)
 
 ```
-1. before_cancel      ← "Before Cancel"
-2. [DB UPDATE: docstatus=2]
-3. on_cancel          ← "After Cancel"
-4. on_change
+1.  before_cancel       ← Server Script: "Before Cancel"
+2.  [DB UPDATE: docstatus = 2]
+3.  on_cancel           ← Server Script: "After Cancel"
+4.  on_change           ← NOT available in Server Scripts
 ```
 
 ### Document Delete
 
 ```
-1. on_trash           ← "Before Delete"
-2. [DB DELETE]
-3. after_delete       ← "After Delete"
+1.  on_trash            ← Server Script: "Before Delete"
+2.  [DB DELETE]
+3.  after_delete        ← Server Script: "After Delete"
 ```
 
 ---
@@ -101,166 +95,167 @@ In Frappe's architecture:
 
 ### Before Insert
 
-**When**: Only for NEW documents, before DB insert
-**Use**: Set initial values, pre-insert validation
-**doc.name**: NOT yet available (unless manually set)
+- **Fires**: Only for NEW documents, before DB insert
+- **doc.name**: NOT yet available (unless manually set or autoname is simple)
+- **Use for**: Setting default values, pre-insert validation
+- **Can throw**: Yes — prevents insert
 
 ```python
-# Example: Default values for new document
 if not doc.priority:
     doc.priority = "Medium"
-
-doc.created_by_script = 1
+doc.created_via_script = 1
 ```
 
 ### After Insert
 
-**When**: Immediately after first DB insert
-**Use**: Create related records, notifications
-**doc.name**: Now available
+- **Fires**: Immediately after first DB insert
+- **doc.name**: Now available
+- **Use for**: Creating related records, sending notifications
+- **Can throw**: Yes, but document is already inserted
 
 ```python
-# Example: Create related ToDo
 frappe.get_doc({
     "doctype": "ToDo",
     "reference_type": doc.doctype,
     "reference_name": doc.name,
-    "description": f"Review {doc.name}"
+    "description": f"Review new {doc.doctype}: {doc.name}"
 }).insert(ignore_permissions=True)
 ```
 
-### Before Validate / Before Save (validate)
+### Before Validate
 
-**When**: Before every save (new and update)
-**Use**: Validation, calculations, auto-fill fields
-**Throw errors here**: Prevents save
+- **Fires**: Before framework validation (mandatory checks, link validation)
+- **Use for**: Setting fields that must pass validation
+- **Can throw**: Yes — prevents save
 
 ```python
-# Before Validate: before framework validation
-# Before Save (validate): for custom validation
+# Set a mandatory field before framework checks it
+if not doc.naming_series:
+    doc.naming_series = "INV-.YYYY.-"
+```
 
+### Before Save (= validate hook)
+
+- **Fires**: Before every save (insert and update)
+- **Use for**: Custom validation, calculations, auto-fill fields
+- **Can throw**: Yes — prevents save
+- **MOST COMMONLY USED event**
+
+```python
 if doc.discount_percentage > 50:
     frappe.throw("Discount cannot exceed 50%")
 
-# Auto-calculation
-doc.total = sum(item.amount for item in doc.items)
+doc.total_qty = sum(frappe.utils.flt(item.qty) for item in doc.items)
 ```
 
-### After Save (on_update)
+### After Save (= on_update hook)
 
-**When**: After successful save to DB
-**Use**: Side effects, sync with external systems
-**Note**: Changes to doc are NOT automatically saved
+- **Fires**: After successful save to database
+- **Changes to doc fields are NOT automatically saved**
+- **Use for**: Side effects, syncing external systems, updating related docs
+- ALWAYS use `doc.db_set()` or `frappe.db.set_value()` to persist changes
 
 ```python
-# Example: Update related document
 if doc.status == "Approved":
-    linked = frappe.get_doc("Project", doc.project)
-    linked.approval_date = frappe.utils.today()
-    linked.save(ignore_permissions=True)
+    frappe.db.set_value("Project", doc.project,
+        "approval_date", frappe.utils.today())
 ```
 
-### Before Submit / After Submit
+### Before Submit
 
-**When**: Only for submittable documents (with docstatus)
-**Before Submit**: Last chance to validate/modify
-**After Submit**: Document is now immutable
+- **Fires**: Only for submittable DocTypes (with is_submittable = 1)
+- **Use for**: Final validation before document becomes immutable
+- **Can throw**: Yes — prevents submit
 
 ```python
-# Before Submit
 if doc.grand_total > 100000 and not doc.manager_approval:
     frappe.throw("Manager approval required for amounts over 100,000")
+```
 
-# After Submit
+### After Submit
+
+- **Fires**: After document is submitted (docstatus = 1)
+- **Document is now immutable** (except via Amend)
+- **Use for**: Sending notifications, creating downstream documents
+
+```python
 frappe.sendmail(
     recipients=[doc.owner],
     subject=f"{doc.name} submitted",
-    message=f"Document {doc.name} has been successfully submitted."
+    message=f"Document {doc.name} has been submitted successfully."
 )
 ```
 
-### Before Cancel / After Cancel
+### Before Cancel
 
-**When**: When cancelling submitted document
-**Before Cancel**: Validate if cancel is allowed
-**After Cancel**: Cleanup, reverse effects
-
-```python
-# Before Cancel
-linked_docs = frappe.get_all("Payment Entry",
-    filters={"reference_name": doc.name, "docstatus": 1})
-if linked_docs:
-    frappe.throw("Cannot cancel: there are linked payments")
-
-# After Cancel
-doc.add_comment("Info", "Document cancelled by system")
-```
-
-### Before Delete / After Delete
-
-**When**: When permanently deleting
-**Before Delete (on_trash)**: Last chance to block
-**After Delete**: Cleanup external references
+- **Fires**: Before cancel operation
+- **Use for**: Checking if cancel is allowed (linked documents, etc.)
+- **Can throw**: Yes — prevents cancel
 
 ```python
-# Before Delete
-if doc.has_linked_documents:
-    frappe.throw("Delete linked documents first")
-
-# After Delete
-frappe.log_error(f"Document {doc.name} deleted", "Audit Log")
-```
-
----
-
-## Special Events
-
-### on_change
-
-Runs after EVERY change (save, submit, cancel). Useful for audit logging:
-
-```python
-# Triggered by save, submit, AND cancel
-frappe.log_error(
-    f"Document {doc.name} changed to status {doc.docstatus}",
-    "Change Log"
+payments = frappe.get_all("Payment Entry Reference",
+    filters={"reference_name": doc.name, "docstatus": 1},
+    fields=["parent"]
 )
+if payments:
+    frappe.throw("Cancel linked payments first")
 ```
 
-### Not available in Server Scripts
+### After Cancel
 
-The following events are only available in Document Controllers, NOT in Server Scripts:
+- **Fires**: After document is cancelled (docstatus = 2)
+- **Use for**: Cleanup, reversing side effects
 
-- `autoname` - Custom naming logic
-- `before_naming` - Pre-naming hook
-- `db_insert` / `db_update` - Immediately after DB operation
-- `get_feed` - Activity feed customization
+```python
+doc.add_comment("Info", f"Cancelled by {frappe.session.user}")
+```
+
+### Before Delete (= on_trash hook)
+
+- **Fires**: Before permanent deletion
+- **Can throw**: Yes — prevents delete
+
+### After Delete
+
+- **Fires**: After permanent deletion
+- **doc.name**: Still available in the script context
+- **Use for**: Cleaning up external references, audit logging
 
 ---
 
-## Common Patterns
+## Hooks NOT Available in Server Scripts
 
-### Only on status change
+These hooks exist in Document Controllers but CANNOT be triggered via Server
+Scripts:
+
+| Hook | Purpose | Alternative |
+|---|---|---|
+| `autoname` | Custom naming logic | Use Naming Rule in DocType settings |
+| `before_naming` | Pre-naming hook | Not available |
+| `before_save` | Runs after validate | Use "Before Save" (= validate) |
+| `db_insert` / `db_update` | After DB operation | Use "After Save" |
+| `on_change` | After any state change | Use "After Save" + "After Submit" |
+| `get_feed` | Activity feed | Not available |
+| `before_rename` / `after_rename` | Rename hooks | Not available |
+
+---
+
+## Multiple Server Scripts on Same Event
+
+- Multiple Server Scripts CAN target the same DocType + Event
+- Execution order is NOT guaranteed
+- NEVER rely on one script's output being available in another
+- If scripts must share data, use `frappe.flags` (transient, same request only)
 
 ```python
-# In After Save: check if status changed
-# Note: get_doc_before_save() not available in Server Scripts
-# Alternative: use flags or custom field
+# Script A (Before Save on Sales Order):
+frappe.flags.custom_total_calculated = True
+doc.custom_total = sum(item.amount for item in doc.items)
 
-if doc.status == "Approved" and doc.previous_status != "Approved":
-    # Action on approval
-    pass
+# Script B (Before Save on Sales Order):
+# WARNING: This may run before Script A — order is undefined
+if frappe.flags.get("custom_total_calculated"):
+    doc.custom_status = "Calculated"
 ```
 
-### Prevent infinite loops
-
-```python
-# Use flags to prevent recursive saves
-if doc.flags.get("skip_custom_logic"):
-    # Skip to prevent loop
-    pass
-else:
-    # Normal logic
-    doc.flags.skip_custom_logic = True
-    # ... changes
-```
+**Best practice**: ALWAYS combine dependent logic into a single Server Script.

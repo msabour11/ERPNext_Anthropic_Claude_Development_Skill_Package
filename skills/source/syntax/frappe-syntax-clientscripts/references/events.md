@@ -1,195 +1,228 @@
-# Client Script Events (EN)
+# Client Script Events Reference
 
-## Form-Level Events
+## Event Execution Order
 
-All form-level events receive `frm` as the first parameter.
-
-### Event Execution Order
-
-**On form load:**
+### On Form Load (new or existing document)
 ```
 setup → onload → refresh → onload_post_render
 ```
 
-**On save (new document):**
+### On Save (new document)
 ```
-validate → before_save → [server save] → after_save
-```
-
-**On save (existing document):**
-```
-validate → before_save → [server save] → after_save
+validate → before_save → [server save] → after_save → refresh
 ```
 
-**On submit:**
+### On Save (existing document)
 ```
-validate → before_submit → [server submit] → on_submit
-```
-
-**On cancel:**
-```
-before_cancel → [server cancel] → after_cancel
+validate → before_save → [server save] → after_save → refresh
 ```
 
-## Complete Event Reference
+### On Submit (docstatus 0 → 1)
+```
+validate → before_submit → [server submit] → on_submit → refresh
+```
 
-| Event | Trigger Moment | Typical Usage |
-|-------|----------------|---------------|
-| `setup` | Once per form instance creation | `set_query`, default values |
-| `onload` | Form is loaded, about to render | Data pre-processing |
-| `refresh` | After form load and render | Buttons, UI, visibility |
-| `onload_post_render` | Fully loaded and rendered | DOM manipulation |
-| `validate` | Before save | Validation, `frappe.throw()` |
-| `before_save` | Just before save call | Last-minute changes |
-| `after_save` | After successful save | Notifications, cleanup |
-| `before_submit` | Before document submit | Pre-submit checks |
-| `on_submit` | After document submit | Post-submit actions |
-| `before_cancel` | Before cancellation | Pre-cancel checks |
-| `after_cancel` | After cancellation | Post-cancel cleanup |
-| `timeline_refresh` | After timeline render | Timeline customization |
-| `before_workflow_action` | Before workflow state change | Workflow interception |
-| `after_workflow_action` | After workflow state change | Workflow post-processing |
+### On Cancel (docstatus 1 → 2)
+```
+before_cancel → [server cancel] → after_cancel → refresh
+```
+
+### On Amend (creates new doc from cancelled)
+```
+after_cancel → [new doc created] → setup → onload → refresh
+```
+
+### On Field Change
+```
+{fieldname} handler → dependent field handlers (if any)
+```
+
+### On frm.refresh() / frm.reload_doc()
+```
+before_load → onload → refresh → onload_post_render
+```
+
+## Complete Form Event Reference
+
+| Event | Fires When | Parameters | Typical Usage |
+|-------|-----------|------------|---------------|
+| `setup` | Once per form instance creation | `(frm)` | `set_query`, formatters, one-time config |
+| `onload` | Form data loaded, before render | `(frm)` | Data pre-processing, defaults |
+| `refresh` | After every load, reload, save | `(frm)` | Buttons, visibility, UI updates |
+| `onload_post_render` | DOM fully rendered | `(frm)` | DOM-dependent operations |
+| `validate` | Before save/submit | `(frm)` | Validation — `frappe.throw()` blocks save |
+| `before_save` | After validate, before server call | `(frm)` | Last-minute value changes |
+| `after_save` | After successful server save | `(frm)` | Notifications, cleanup |
+| `before_submit` | Before document submission | `(frm)` | Pre-submit validation |
+| `on_submit` | After successful submission | `(frm)` | Post-submit actions |
+| `before_cancel` | Before cancellation | `(frm)` | Pre-cancel checks |
+| `after_cancel` | After successful cancellation | `(frm)` | Cleanup, notifications |
+| `before_workflow_action` | Before workflow state change | `(frm)` | Workflow interception |
+| `after_workflow_action` | After workflow state change | `(frm)` | Post-workflow actions |
+| `timeline_refresh` | After timeline section render | `(frm)` | Timeline customization |
 
 ## Field Change Events
 
-React to value change of a specific field:
+ALWAYS use the exact fieldname as the event name:
 
 ```javascript
-frappe.ui.form.on('Sales Order', {
+frappe.ui.form.on('Sales Invoice', {
+    // Fires when 'customer' field value changes
     customer(frm) {
-        // Triggered when 'customer' field changes
         if (frm.doc.customer) {
             // Fetch related data
         }
     },
-    
+
+    // Fires when 'posting_date' field value changes
     posting_date(frm) {
-        // Triggered when 'posting_date' changes
+        // Recalculate due date
     }
 });
 ```
 
-## Event Parameters
+**CRITICAL**: Field change events fire when:
+- User changes the value in the UI
+- `frm.set_value()` is called programmatically
+- `frappe.model.set_value()` is called on a child row field
 
-### Form Events
+They do NOT fire when:
+- `frm.doc.field = value` is assigned directly (which is why you NEVER do this)
 
-```javascript
-frappe.ui.form.on('DocType', {
-    event_name(frm) {
-        // frm = form object
-        // frm.doc = document data
-        // frm.doctype = doctype name
-        // frm.is_new() = true if new document
-    }
-});
-```
+## Child Table Events
 
-### Child Table Events
+ALWAYS register child table events on the CHILD DocType name, not the parent:
 
 ```javascript
-frappe.ui.form.on('Child DocType', {
-    fieldname(frm, cdt, cdn) {
-        // frm = parent form object
-        // cdt = child doctype name
-        // cdn = child row name (ID)
+// CORRECT — register on child doctype 'Sales Order Item'
+frappe.ui.form.on('Sales Order Item', {
+    // Field change in child row
+    qty(frm, cdt, cdn) {
         let row = frappe.get_doc(cdt, cdn);
+        frappe.model.set_value(cdt, cdn, 'amount', row.qty * row.rate);
     },
-    
+
+    // Row added to 'items' table
     items_add(frm, cdt, cdn) {
-        // New row added
+        let row = frappe.get_doc(cdt, cdn);
+        // Set defaults for new row
+        frappe.model.set_value(cdt, cdn, 'warehouse', frm.doc.set_warehouse);
     },
-    
+
+    // Row removed from 'items' table
     items_remove(frm) {
-        // Row removed (no cdt/cdn)
+        // Recalculate totals — no cdt/cdn available
+        calculate_totals(frm);
     },
-    
+
+    // Row moved (drag & drop reorder)
     items_move(frm) {
-        // Row moved (drag & drop)
+        // Update idx or recalculate
+    },
+
+    // Before row removal [v14+]
+    items_before_remove(frm, cdt, cdn) {
+        // Return false to prevent removal
     }
 });
 ```
 
-## Event Naming Conventions
+### Child Table Event Naming Convention
 
-### Child Table Events
+Format: `{tablefieldname}_{action}`
 
-Format: `{tablename}_{action}`
+| Event Pattern | Description | Parameters |
+|---------------|-------------|------------|
+| `{table}_add` | Row added | `(frm, cdt, cdn)` |
+| `{table}_remove` | Row removed | `(frm)` |
+| `{table}_move` | Row reordered | `(frm)` |
+| `{table}_before_remove` | Before row removal | `(frm, cdt, cdn)` |
 
-| Event | Description |
-|-------|-------------|
-| `{table}_add` | Row added |
-| `{table}_remove` | Row removed |
-| `{table}_move` | Row moved |
-| `{table}_before_remove` | Before row removal |
-
-### Field Events
-
-Use the exact fieldname as event name:
+### Child Table Event Parameters
 
 ```javascript
-frappe.ui.form.on('Sales Invoice', {
-    // Field 'grand_total' change event
-    grand_total(frm) { },
-    
-    // Field 'customer' change event
-    customer(frm) { }
+frappe.ui.form.on('Sales Order Item', {
+    qty(frm, cdt, cdn) {
+        // frm  — parent form object (Sales Order)
+        // cdt  — child doctype name ('Sales Order Item')
+        // cdn  — child row name/ID (e.g., 'abc123def4')
+
+        // Get the row data object
+        let row = frappe.get_doc(cdt, cdn);
+        // Or equivalently:
+        let row2 = locals[cdt][cdn];
+    }
 });
 ```
 
-## Important: setup vs refresh
+## setup vs refresh — When to Use Which
 
-| Aspect | setup | refresh |
-|--------|-------|---------|
-| Frequency | Once per form instance | On every refresh/reload |
-| Usage | Filters, queries | Buttons, visibility |
-| Timing | Before data load | After data load |
+| Aspect | `setup` | `refresh` |
+|--------|---------|-----------|
+| **Frequency** | Once per form instance | On every load, reload, save |
+| **Timing** | Before data is loaded | After data is loaded and rendered |
+| **Use for** | `set_query`, formatters, one-time config | Buttons, field visibility, dynamic UI |
+| **frm.doc available?** | Partially (may be empty on new) | Yes, fully populated |
 
 ```javascript
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
-        // GOOD: set_query here
+        // GOOD: set_query runs once, filter callback reads frm.doc dynamically
         frm.set_query('customer', () => ({
             filters: { disabled: 0 }
         }));
     },
-    
+
     refresh(frm) {
-        // GOOD: buttons here
-        frm.add_custom_button(__('Action'), () => {});
-        
-        // BAD: set_query here (works, but inefficient)
-    }
-});
-```
-
-## Event Chaining and Return Values
-
-### validate Event
-
-```javascript
-frappe.ui.form.on('Sales Order', {
-    validate(frm) {
-        // Return false or throw to prevent save
-        if (frm.doc.grand_total <= 0) {
-            frappe.throw(__('Total must be positive'));
-            // Or: return false;
+        // GOOD: buttons depend on document state
+        if (!frm.is_new() && frm.doc.docstatus === 0) {
+            frm.add_custom_button(__('Validate'), () => { /* ... */ });
         }
     }
 });
 ```
 
-### Promise Support
+## Async Events
 
-Modern events support async/await:
+Events support async/await. This is CRITICAL for `validate` when you need server-side checks:
 
 ```javascript
 frappe.ui.form.on('Sales Order', {
-    async refresh(frm) {
-        let data = await frappe.call({
-            method: 'myapp.api.get_data',
-            args: { name: frm.doc.name }
+    // CORRECT: async validate with await
+    async validate(frm) {
+        let r = await frappe.call({
+            method: 'myapp.api.check_credit',
+            args: { customer: frm.doc.customer }
         });
-        // Process data
+        if (!r.message.approved) {
+            frappe.throw(__('Credit limit exceeded'));
+        }
+        // If no throw, save proceeds
+    },
+
+    // CORRECT: async refresh for data fetching
+    async refresh(frm) {
+        if (!frm.is_new()) {
+            let data = await frappe.call({
+                method: 'myapp.api.get_dashboard_data',
+                args: { name: frm.doc.name }
+            });
+            // Update UI with data
+        }
     }
 });
 ```
+
+**NEVER** use a non-awaited `frappe.call` inside `validate` — the save will proceed before the callback fires.
+
+## Triggering Events Programmatically
+
+```javascript
+// Trigger the refresh event manually
+frm.trigger('refresh');
+
+// Trigger a field change event
+frm.trigger('customer');
+```
+
+This is useful when a field change handler should re-run after you set a value that indirectly affects display logic.

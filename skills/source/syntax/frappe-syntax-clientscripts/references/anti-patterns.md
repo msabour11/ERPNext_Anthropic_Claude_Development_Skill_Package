@@ -1,54 +1,46 @@
-# Client Script Anti-Patterns (EN)
+# Client Script Anti-Patterns
 
-## ❌ Direct Field Value Assignment
+## AP-01: Direct Field Value Assignment
 
 **WRONG:**
 ```javascript
-frappe.ui.form.on('Sales Order', {
-    customer(frm) {
-        frm.doc.customer_name = 'Test';  // WRONG!
-    }
-});
+frm.doc.customer_name = 'Test';  // NEVER do this
 ```
 
 **CORRECT:**
 ```javascript
-frappe.ui.form.on('Sales Order', {
-    customer(frm) {
-        frm.set_value('customer_name', 'Test');  // GOOD
-    }
-});
+frm.set_value('customer_name', 'Test');
 ```
 
-**Why:** `frm.set_value()` triggers dirty flag, validation, and UI refresh. Direct assignment does not.
+**Why:** `frm.set_value()` triggers the dirty flag, field change events, dependent field updates, and UI refresh. Direct assignment skips all of these, leading to stale UI and lost data.
 
 ---
 
-## ❌ Child Table Modification Without Refresh
+## AP-02: Child Table Modification Without refresh_field
 
 **WRONG:**
 ```javascript
 let row = frm.add_child('items', { item_code: 'TEST' });
-// UI doesn't show new row!
+// UI does NOT show the new row
 ```
 
 **CORRECT:**
 ```javascript
 let row = frm.add_child('items', { item_code: 'TEST' });
-frm.refresh_field('items');  // REQUIRED
+frm.refresh_field('items');  // ALWAYS required
 ```
 
-**Why:** The UI is not automatically updated after child table manipulation.
+**Why:** Child table UI is not automatically synchronized. ALWAYS call `frm.refresh_field()` after `add_child`, `clear_table`, or direct row modifications.
 
 ---
 
-## ❌ set_query in refresh Event
+## AP-03: set_query in refresh Instead of setup
 
 **WRONG:**
 ```javascript
 frappe.ui.form.on('Sales Order', {
     refresh(frm) {
-        frm.set_query('customer', () => ({
+        frm.set_query('customer', () => ({  // Runs on EVERY refresh
             filters: { disabled: 0 }
         }));
     }
@@ -59,67 +51,59 @@ frappe.ui.form.on('Sales Order', {
 ```javascript
 frappe.ui.form.on('Sales Order', {
     setup(frm) {
-        frm.set_query('customer', () => ({
+        frm.set_query('customer', () => ({  // Runs ONCE
             filters: { disabled: 0 }
         }));
     }
 });
 ```
 
-**Why:** `setup` runs once; `refresh` is triggered repeatedly. Query in refresh is inefficient.
+**Why:** `setup` runs once per form instance. `refresh` fires on every load, reload, and save. Queries set in `refresh` are redundantly re-registered. The callback function inside `set_query` already reads `frm.doc` dynamically at execution time.
 
 ---
 
-## ❌ Synchronous Server Calls
+## AP-04: Synchronous Server Calls
 
 **WRONG:**
 ```javascript
-frappe.ui.form.on('Sales Order', {
-    customer(frm) {
-        frappe.call({
-            method: 'myapp.api.get_data',
-            async: false,  // WRONG! Blocks UI
-            callback: (r) => { }
-        });
-    }
+frappe.call({
+    method: 'myapp.api.get_data',
+    async: false,  // NEVER use async: false
+    callback: (r) => { /* ... */ }
 });
 ```
 
 **CORRECT:**
 ```javascript
-frappe.ui.form.on('Sales Order', {
-    async customer(frm) {
-        let r = await frappe.call({
-            method: 'myapp.api.get_data'
-        });
-        // Process result
-    }
+let r = await frappe.call({
+    method: 'myapp.api.get_data'
 });
+// Or use callback pattern (still async)
 ```
 
-**Why:** Synchronous calls freeze the browser. Always use async patterns.
+**Why:** `async: false` blocks the entire browser thread. The UI freezes, the user cannot interact, and browser may show "page unresponsive" warnings. ALWAYS use async patterns.
 
 ---
 
-## ❌ Hardcoded Strings Without Translation
+## AP-05: Hardcoded Strings Without Translation
 
 **WRONG:**
 ```javascript
-frappe.msgprint('Operation completed successfully');
+frappe.msgprint('Operation completed');
 frm.add_custom_button('Generate Report', () => {});
 ```
 
 **CORRECT:**
 ```javascript
-frappe.msgprint(__('Operation completed successfully'));
+frappe.msgprint(__('Operation completed'));
 frm.add_custom_button(__('Generate Report'), () => {});
 ```
 
-**Why:** Without `__()` translation won't work for multilingual installations.
+**Why:** Without `__()` wrapper, strings are not translatable. ALWAYS wrap every user-facing string in `__()`.
 
 ---
 
-## ❌ Callback Hell
+## AP-06: Callback Hell in Server Calls
 
 **WRONG:**
 ```javascript
@@ -131,9 +115,7 @@ frappe.call({
             callback: (r2) => {
                 frappe.call({
                     method: 'method3',
-                    callback: (r3) => {
-                        // Unreadable!
-                    }
+                    callback: (r3) => { /* deeply nested */ }
                 });
             }
         });
@@ -147,20 +129,26 @@ async function processData() {
     let r1 = await frappe.call({ method: 'method1' });
     let r2 = await frappe.call({ method: 'method2' });
     let r3 = await frappe.call({ method: 'method3' });
-    // Readable and maintainable
 }
+
+// Or for independent calls — use Promise.all
+let [r1, r2, r3] = await Promise.all([
+    frappe.call({ method: 'method1' }),
+    frappe.call({ method: 'method2' }),
+    frappe.call({ method: 'method3' })
+]);
 ```
 
 ---
 
-## ❌ No Error Handling on Server Calls
+## AP-07: No Error Handling on Server Calls
 
 **WRONG:**
 ```javascript
 frappe.call({
     method: 'myapp.api.risky_operation',
     callback: (r) => {
-        frm.set_value('result', r.message);  // Crashes if r.message undefined
+        frm.set_value('result', r.message);  // Crashes if r.message is undefined
     }
 });
 ```
@@ -180,9 +168,11 @@ frappe.call({
 });
 ```
 
+**Why:** Server calls can fail due to permissions, validation errors, or network issues. ALWAYS check `r.message` before use and provide an error handler.
+
 ---
 
-## ❌ frappe.throw in Async Callbacks
+## AP-08: Non-Awaited frappe.call in validate Event
 
 **WRONG:**
 ```javascript
@@ -190,10 +180,9 @@ frappe.ui.form.on('Sales Order', {
     validate(frm) {
         frappe.call({
             method: 'myapp.api.check_credit',
-            async: true,
             callback: (r) => {
                 if (!r.message.ok) {
-                    frappe.throw(__('Credit exceeded'));  // Too late! Save already started
+                    frappe.throw(__('Credit exceeded'));  // TOO LATE — save already proceeded
                 }
             }
         });
@@ -209,25 +198,24 @@ frappe.ui.form.on('Sales Order', {
             method: 'myapp.api.check_credit',
             args: { customer: frm.doc.customer }
         });
-        
         if (!r.message.ok) {
-            frappe.throw(__('Credit exceeded'));  // Works correctly
+            frappe.throw(__('Credit exceeded'));  // Blocks save correctly
         }
     }
 });
 ```
 
-**Why:** Non-blocking callbacks execute after validate has already returned.
+**Why:** Without `await`, the `validate` function returns immediately and the save proceeds. The callback fires after the save is already in progress. ALWAYS use `async/await` when validate needs server data.
 
 ---
 
-## ❌ Excessive refresh_field Usage
+## AP-09: refresh_field Inside Loops
 
 **WRONG:**
 ```javascript
 frm.doc.items.forEach(item => {
     item.amount = item.qty * item.rate;
-    frm.refresh_field('items');  // WRONG! In every iteration
+    frm.refresh_field('items');  // Called N times — performance disaster
 });
 ```
 
@@ -236,16 +224,16 @@ frm.doc.items.forEach(item => {
 frm.doc.items.forEach(item => {
     item.amount = item.qty * item.rate;
 });
-frm.refresh_field('items');  // Once after all modifications
+frm.refresh_field('items');  // Called ONCE after all modifications
 ```
 
 ---
 
-## ❌ Global Variables for State
+## AP-10: Global Variables for Form State
 
 **WRONG:**
 ```javascript
-var current_customer = null;  // Global state
+var current_customer = null;  // Global scope
 
 frappe.ui.form.on('Sales Order', {
     customer(frm) {
@@ -258,40 +246,34 @@ frappe.ui.form.on('Sales Order', {
 ```javascript
 frappe.ui.form.on('Sales Order', {
     customer(frm) {
-        frm.customer_data = {};  // State on frm object
+        frm._customer_cache = {};  // Attach to frm object
     }
 });
 ```
 
-**Why:** Global variables conflict between multiple open forms.
+**Why:** Global variables are shared across all open form tabs. If two Sales Orders are open, they overwrite each other's state. ALWAYS attach state to the `frm` object.
 
 ---
 
-## ❌ DOM Manipulation Outside Frappe API
+## AP-11: Direct DOM/jQuery Manipulation
 
 **WRONG:**
 ```javascript
-frappe.ui.form.on('Sales Order', {
-    refresh(frm) {
-        $('[data-fieldname="customer"]').hide();  // Direct jQuery
-    }
-});
+$('[data-fieldname="customer"]').hide();
+$('.form-group[data-fieldname="amount"] input').prop('disabled', true);
 ```
 
 **CORRECT:**
 ```javascript
-frappe.ui.form.on('Sales Order', {
-    refresh(frm) {
-        frm.toggle_display('customer', false);  // Frappe API
-    }
-});
+frm.toggle_display('customer', false);
+frm.toggle_enable('amount', false);
 ```
 
-**Why:** Direct DOM manipulation can conflict with Frappe's form rendering.
+**Why:** Direct DOM manipulation bypasses Frappe's rendering cycle. Frappe may overwrite your changes on the next refresh. ALWAYS use Frappe API methods.
 
 ---
 
-## ❌ Blocking Loops for Server Calls
+## AP-12: Blocking Loops for Server Calls
 
 **WRONG:**
 ```javascript
@@ -299,41 +281,40 @@ frm.doc.items.forEach(item => {
     frappe.call({
         method: 'myapp.api.process_item',
         args: { item: item.name },
-        async: false  // Blocks for EVERY item!
+        async: false  // Blocks for EVERY item
     });
 });
 ```
 
 **CORRECT:**
 ```javascript
-// Option 1: Batch call
-frappe.call({
+// Option 1: Batch call (preferred — single server round trip)
+await frappe.call({
     method: 'myapp.api.process_items',
     args: { items: frm.doc.items.map(i => i.name) }
 });
 
-// Option 2: Promise.all for parallel execution
-async function processItems(frm) {
-    await Promise.all(frm.doc.items.map(item =>
-        frappe.call({
-            method: 'myapp.api.process_item',
-            args: { item: item.name }
-        })
-    ));
-}
+// Option 2: Parallel execution
+await Promise.all(frm.doc.items.map(item =>
+    frappe.call({
+        method: 'myapp.api.process_item',
+        args: { item: item.name }
+    })
+));
 ```
+
+**Why:** ALWAYS prefer a single batch call. If batch is not possible, use `Promise.all` for parallel execution. NEVER use `async: false` in a loop.
 
 ---
 
-## ❌ No Check on frm.is_new()
+## AP-13: Buttons Without State Guards
 
 **WRONG:**
 ```javascript
 frappe.ui.form.on('Sales Order', {
     refresh(frm) {
-        // Button appears even on new documents where it won't work
         frm.add_custom_button(__('Process'), () => {
-            frm.call('process');
+            frm.call('process');  // Fails on new/cancelled documents
         });
     }
 });
@@ -343,7 +324,7 @@ frappe.ui.form.on('Sales Order', {
 ```javascript
 frappe.ui.form.on('Sales Order', {
     refresh(frm) {
-        if (!frm.is_new()) {
+        if (!frm.is_new() && frm.doc.docstatus === 0) {
             frm.add_custom_button(__('Process'), () => {
                 frm.call('process');
             });
@@ -352,26 +333,28 @@ frappe.ui.form.on('Sales Order', {
 });
 ```
 
+**Why:** Buttons appear on every document state (new, draft, submitted, cancelled). ALWAYS check `frm.is_new()`, `frm.doc.docstatus`, and relevant field values before adding action buttons.
+
 ---
 
-## ❌ frappe.model.set_value Outside Child Events
+## AP-14: frappe.model.set_value Outside Child Context
 
 **WRONG:**
 ```javascript
-// In parent form context
-frappe.model.set_value(cdt, cdn, 'qty', 10);  // cdt/cdn not available
+// In parent form event — cdt/cdn are not available
+frappe.model.set_value(cdt, cdn, 'qty', 10);
 ```
 
 **CORRECT:**
 ```javascript
-// In child table event
+// In child table event — cdt/cdn are parameters
 frappe.ui.form.on('Sales Order Item', {
     item_code(frm, cdt, cdn) {
-        frappe.model.set_value(cdt, cdn, 'qty', 10);  // Correct context
+        frappe.model.set_value(cdt, cdn, 'qty', 10);
     }
 });
 
-// Or directly via frm.doc
+// From parent context — use direct access + refresh
 frm.doc.items[0].qty = 10;
 frm.refresh_field('items');
 ```
@@ -380,11 +363,16 @@ frm.refresh_field('items');
 
 ## Pre-Deployment Checklist
 
-- [ ] All strings wrapped in `__()`
-- [ ] No `async: false` calls
-- [ ] `refresh_field()` after child table modifications
-- [ ] Error handling on all server calls
-- [ ] `frm.is_new()` check where needed
-- [ ] `set_query` in `setup`, not `refresh`
-- [ ] No global state variables
-- [ ] No direct DOM manipulation
+ALWAYS verify before deploying a client script:
+
+- [ ] All user-facing strings wrapped in `__()`
+- [ ] No `async: false` anywhere
+- [ ] `refresh_field()` called after every child table modification
+- [ ] `refresh_field()` called ONCE after loops, not inside loops
+- [ ] Error handling on all server calls (`if (r.message)` + error callback)
+- [ ] `frm.is_new()` / `docstatus` checks before action buttons
+- [ ] `set_query` placed in `setup`, not `refresh`
+- [ ] No global state variables — state attached to `frm` object
+- [ ] No direct DOM/jQuery manipulation — Frappe API used
+- [ ] `validate` event uses `async/await` for any server calls
+- [ ] No `frm.doc.field = value` — only `frm.set_value()`

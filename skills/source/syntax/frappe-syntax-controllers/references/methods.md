@@ -1,290 +1,196 @@
-# Document Methods Reference
+# Document Class Methods Reference
 
-> Complete documentatie van alle `doc.*` methodes beschikbaar in Frappe Document Controllers.
+Complete reference for all `doc.*` methods available in Frappe Document Controllers.
 
 ---
 
-## Data Access Methodes
+## Data Access Methods
 
 ### doc.get(fieldname, default=None)
 
-Veilig ophalen van veldwaarde met optionele default.
+Safely retrieve field value with optional default.
 
 ```python
-# Basis gebruik
 customer = self.get("customer")
-
-# Met default waarde
 status = self.get("status", "Draft")
+items = self.get("items", [])  # Child table returns list
+```
 
-# Voor child table velden
-items = self.get("items", [])
+### doc.set(fieldname, value)
+
+Set field value. Works for all field types including child tables.
+
+```python
+self.set("status", "Completed")
+self.set("items", [{"item_code": "ITEM-001", "qty": 10}])  # Replaces child table
 ```
 
 ### doc.as_dict(no_nulls=False, no_default_fields=False)
 
-Serialiseert document naar dictionary.
+Serialize document to dictionary.
 
 ```python
->>> doc.as_dict()
-{
-    'name': 'SO-00001',
-    'doctype': 'Sales Order',
-    'owner': 'Administrator',
-    'creation': datetime.datetime(2025, 1, 13, 10, 30, 0),
-    'modified': datetime.datetime(2025, 1, 13, 11, 0, 0),
-    'customer': 'Customer A',
-    'items': [{'item_code': 'ITEM-001', 'qty': 10}],
-    ...
-}
-
-# Zonder null velden
->>> doc.as_dict(no_nulls=True)
-# Alleen velden met waarden
-
-# Zonder standaard velden (name, owner, creation, etc.)
->>> doc.as_dict(no_default_fields=True)
+data = doc.as_dict()
+data_clean = doc.as_dict(no_nulls=True)  # Skip None fields
+data_minimal = doc.as_dict(no_default_fields=True)  # Skip name, owner, creation, etc.
 ```
 
 ### doc.get_valid_dict(sanitize=True, convert_dates_to_str=False)
 
-Retourneert dictionary met alleen geldige velden (gefilterd op permissions en docfield meta).
+Return dictionary with only valid fields (filtered by permissions and docfield meta).
 
 ```python
-# Voor API responses - alleen toegestane velden
 valid_data = self.get_valid_dict()
-
-# Voor export - dates als strings
 export_data = self.get_valid_dict(convert_dates_to_str=True)
+```
+
+### doc.has_value_changed(fieldname)
+
+Check if a specific field changed since last save. Available in validate and later hooks.
+
+```python
+def validate(self):
+    if self.has_value_changed("status"):
+        self.status_changed_on = frappe.utils.now()
+```
+
+### doc.get_doc_before_save()
+
+Return document as it was before current modifications. Returns `None` for new documents.
+
+```python
+def validate(self):
+    old = self.get_doc_before_save()
+    if old is None:
+        pass  # New document
+    elif old.status != self.status:
+        self.log_status_change(old.status, self.status)
+```
+
+### doc.is_new()
+
+Check if document is new (not yet saved to database).
+
+```python
+def validate(self):
+    if self.is_new():
+        self.status = "Draft"
 ```
 
 ---
 
-## Database Operaties
+## Database Operations
 
 ### doc.insert(ignore_permissions=False, ignore_links=False, ignore_if_duplicate=False, ignore_mandatory=False)
 
-Insert nieuw document in database met alle hooks.
+Insert new document with all lifecycle hooks.
 
 ```python
-# Standaard insert
-doc = frappe.get_doc({
-    "doctype": "Task",
-    "subject": "New Task"
-})
+doc = frappe.get_doc({"doctype": "Task", "subject": "New Task"})
 doc.insert()
-
-# Met flags
-doc.insert(
-    ignore_permissions=True,     # Bypass write permissions
-    ignore_links=True,           # Bypass link validatie
-    ignore_if_duplicate=True,    # Geen error bij duplicate
-    ignore_mandatory=True        # Bypass verplichte velden
-)
+doc.insert(ignore_permissions=True, ignore_mandatory=True)  # Bypass checks
 ```
 
 ### doc.save(ignore_permissions=False, ignore_version=True)
 
-Save bestaand document met alle hooks.
+Save existing document with all lifecycle hooks.
 
 ```python
-# Standaard save
 doc.customer = "New Customer"
 doc.save()
-
-# Met flags
-doc.save(
-    ignore_permissions=True,     # Bypass write permissions
-    ignore_version=True          # Geen version record maken
-)
+doc.save(ignore_permissions=True)
 ```
 
 ### doc.submit()
 
-Submit document (docstatus 0 â†’ 1). Alleen voor submittable DocTypes.
+Submit document (docstatus 0 -> 1). ONLY for submittable DocTypes.
 
 ```python
 doc = frappe.get_doc("Sales Order", "SO-00001")
-doc.submit()  # Triggert before_submit, on_submit hooks
+doc.submit()  # Triggers before_submit, on_submit
 ```
 
 ### doc.cancel()
 
-Cancel document (docstatus 1 â†’ 2).
+Cancel document (docstatus 1 -> 2).
 
 ```python
-doc = frappe.get_doc("Sales Order", "SO-00001")
-doc.cancel()  # Triggert before_cancel, on_cancel hooks
+doc.cancel()  # Triggers before_cancel, on_cancel
 ```
 
 ### doc.delete()
 
-Verwijder document uit database.
+Delete document from database.
 
 ```python
-doc.delete()  # Triggert on_trash, after_delete hooks
+doc.delete()  # Triggers on_trash, after_delete
 ```
 
 ### doc.reload()
 
-Herlaad document uit database met laatste waarden.
+Reload document from database with latest values.
 
 ```python
 def on_update(self):
-    # Andere code heeft misschien velden geÃ¼pdatet
-    self.reload()
-    print(self.modified_by)  # Meest recente waarde uit DB
+    self.reload()  # Get latest values after DB write
+```
+
+### doc.db_set(fieldname, value, notify=True, commit=False, update_modified=True)
+
+Direct database field update. ALWAYS use this instead of modifying self in post-save hooks.
+
+```python
+def on_update(self):
+    self.db_set("processed", 1)
+    self.db_set("status", "Completed", update_modified=False)
+    # Or update multiple fields:
+    self.db_set({"status": "Completed", "processed_at": frappe.utils.now()})
 ```
 
 ---
 
-## Low-Level Database Methodes
+## Low-Level Database Methods (USE WITH CAUTION)
 
 ### doc.db_insert(*args, **kwargs)
 
-**âš ï¸ WAARSCHUWING**: Directe database insert, bypast ALLE hooks.
+Direct database insert. Bypasses ALL hooks and validation.
 
 ```python
-# ALLEEN gebruiken als je EXACT weet wat je doet
-doc = frappe.get_doc({"doctype": "Log", "message": "test"})
-doc.db_insert()  # Geen hooks, geen validatie
-
-# âœ… Gebruik normaal insert() in plaats hiervan
-doc.insert()
+# ONLY for bulk operations or Virtual DocTypes
+doc.db_insert()  # No validate, no permissions, no hooks
 ```
 
 ### doc.db_update()
 
-**âš ï¸ WAARSCHUWING**: Directe database update, bypast ALLE hooks.
+Direct database update. Bypasses ALL hooks and validation.
 
 ```python
-# Bypass alle hooks - VERMIJD DIT
-doc.some_field = "new value"
-doc.db_update()
-
-# âœ… Gebruik save() of db_set() in plaats hiervan
-doc.save()
-# of voor enkele velden:
-frappe.db.set_value(doc.doctype, doc.name, "field", "value")
+# ONLY for performance-critical bulk operations
+doc.db_update()  # No validate, no permissions, no hooks
 ```
+
+ALWAYS prefer `insert()` and `save()` over `db_insert()` and `db_update()`.
 
 ---
 
-## Vergelijking met Vorige Versie
-
-### doc.get_doc_before_save()
-
-Retourneert document zoals het was vÃ³Ã³r huidige wijzigingen. Beschikbaar in `validate`, `on_update`, `on_change`, etc.
-
-```python
-def validate(self):
-    old_doc = self.get_doc_before_save()
-    
-    if old_doc is None:
-        # Dit is een NIEUW document
-        self.created_by_validate = True
-    else:
-        # Dit is een UPDATE
-        if old_doc.status != self.status:
-            self.log_status_change(old_doc.status, self.status)
-        
-        if old_doc.customer != self.customer:
-            frappe.throw(_("Cannot change customer after creation"))
-```
-
-**Let op**: Retourneert `None` voor nieuwe documenten (insert).
-
----
-
-## Method Execution
-
-### doc.run_method(method_name, *args, **kwargs)
-
-Voert controller method uit en triggert ook bijbehorende hooks (doc_events, server scripts).
-
-```python
-# Voert validate uit + hooks.py doc_events + server scripts
-doc.run_method('validate')
-
-# Met argumenten
-doc.run_method('custom_method', value1='test', notify=True)
-```
-
-### doc.queue_action(action, **kwargs)
-
-Voert controller method uit in achtergrond (async).
-
-```python
-def on_submit(self):
-    # Zware operatie async uitvoeren
-    self.queue_action('send_emails', 
-        emails=email_list, 
-        message='Order submitted'
-    )
-
-def send_emails(self, emails, message):
-    """Deze methode draait in background job."""
-    for email in emails:
-        frappe.sendmail(recipients=email, message=message)
-```
-
----
-
-## Realtime Updates
-
-### doc.notify_update()
-
-Publiceert realtime event dat document is gewijzigd (triggert form refresh in browser).
-
-```python
-# Na directe DB update - vertel frontend dat doc is gewijzigd
-frappe.db.set_value('Sales Order', self.name, 'status', 'Closed')
-self.notify_update()  # Browser refresht automatisch
-```
-
----
-
-## Comments & Communication
-
-### doc.add_comment(comment_type, text, comment_email=None, comment_by=None)
-
-Voegt commentaar toe aan document timeline.
-
-```python
-def on_submit(self):
-    self.add_comment('Edit', 'Document submitted for processing')
-
-def on_cancel(self):
-    self.add_comment('Cancelled', f'Cancelled by {frappe.session.user}')
-```
-
-**Comment Types**: `Comment`, `Edit`, `Created`, `Submitted`, `Cancelled`, `Updated`, `Deleted`, `Assigned`, `Attachment`, `Info`, `Label`, `Shared`
-
----
-
-## Child Table Methodes
+## Child Table Methods
 
 ### doc.append(fieldname, value=None)
 
-Voeg rij toe aan child table.
+Add row to child table.
 
 ```python
-# Nieuwe rij met data
-self.append("items", {
+row = self.append("items", {
     "item_code": "ITEM-001",
     "qty": 10,
     "rate": 100
 })
-
-# Lege rij ophalen
-row = self.append("items")
-row.item_code = "ITEM-001"
-row.qty = 10
+# row is the new child document object
 ```
 
 ### doc.extend(fieldname, values)
 
-Voeg meerdere rijen toe aan child table.
+Add multiple rows to child table.
 
 ```python
 self.extend("items", [
@@ -293,122 +199,141 @@ self.extend("items", [
 ])
 ```
 
-### doc.set(fieldname, value)
-
-Set veldwaarde (werkt voor alle veldtypes).
+### Iterating child tables
 
 ```python
-# Enkele waarde
-self.set("status", "Completed")
-
-# Child table vervangen
-self.set("items", [
-    {"item_code": "ITEM-001", "qty": 10}
-])
-```
-
-### doc.get(fieldname) voor child tables
-
-```python
-# Krijg alle items
 for item in self.get("items"):
     print(item.item_code, item.qty)
 
-# Filter items
-high_value_items = [i for i in self.get("items") if i.amount > 1000]
+# Filter
+high_value = [i for i in self.items if i.amount > 1000]
 ```
 
 ---
 
-## Tree DocType Methodes (NestedSet)
+## Method Execution
 
-Alleen beschikbaar voor DocTypes met "Is Tree" enabled.
+### doc.run_method(method_name, *args, **kwargs)
 
-### doc.get_children()
+Execute controller method AND trigger associated hooks (doc_events, server scripts).
 
 ```python
-# Krijg directe kinderen
-for child in self.get_children():
-    print(child.name)
+doc.run_method("validate")  # Runs validate + all doc_events for validate
+doc.run_method("custom_method", value="test")
 ```
 
-### doc.get_parent()
+### doc.queue_action(action, **kwargs)
+
+Execute controller method asynchronously in background.
 
 ```python
-# Krijg parent document
-parent = self.get_parent()
-if parent:
-    print(f"Parent: {parent.name}")
-```
+def on_submit(self):
+    self.queue_action("send_emails", emails=email_list)
 
-### doc.get_ancestors()
-
-```python
-# Krijg alle ancestors (parents tot root)
-for ancestor in self.get_ancestors():
-    print(ancestor)
+def send_emails(self, emails):
+    for email in emails:
+        frappe.sendmail(recipients=email, message="Order submitted")
 ```
 
 ---
 
-## Utility Methodes
+## Permission Methods
 
-### doc.is_new()
+### doc.has_permission(permtype="read", user=None)
 
-Check of document nieuw is (nog niet opgeslagen).
-
-```python
-def validate(self):
-    if self.is_new():
-        self.status = "Draft"
-```
-
-### doc.has_permission(permtype='read', user=None)
-
-Check of gebruiker permission heeft.
+Check if user has permission on this document.
 
 ```python
-if not self.has_permission('write'):
-    frappe.throw(_("You don't have permission to modify this document"))
+if not self.has_permission("write"):
+    frappe.throw(_("No write permission"))
 ```
+
+### doc.check_permission(permtype="read")
+
+Same as has_permission but throws if no permission.
+
+```python
+self.check_permission("submit")  # Throws if not permitted
+```
+
+---
+
+## Communication Methods
+
+### doc.add_comment(comment_type, text, comment_email=None, comment_by=None)
+
+Add comment to document timeline.
+
+```python
+self.add_comment("Edit", "Document updated by system")
+self.add_comment("Info", f"Status changed to {self.status}")
+```
+
+Comment types: `Comment`, `Edit`, `Created`, `Submitted`, `Cancelled`, `Info`, `Label`, `Shared`, `Assigned`, `Attachment`
+
+### doc.notify_update()
+
+Publish realtime event that document has changed. Triggers form refresh in browser.
+
+```python
+frappe.db.set_value("Sales Order", self.name, "status", "Closed")
+self.notify_update()  # Browser refreshes automatically
+```
+
+---
+
+## Utility Methods
 
 ### doc.get_title()
 
-Krijg document title (gebruikt title_field configuratie).
+Return document title (uses title_field configuration).
 
 ```python
-title = doc.get_title()  # Bijv. customer name voor Sales Order
+title = doc.get_title()  # e.g., customer name for Sales Order
 ```
 
 ### doc.get_url()
 
-Krijg URL naar document in desk.
+Return desk URL for this document.
 
 ```python
 url = doc.get_url()  # /app/sales-order/SO-00001
 ```
 
+### doc.add_tag(tag_name)
+
+```python
+doc.add_tag("urgent")
+```
+
+### doc.get_tags()
+
+```python
+tags = doc.get_tags()  # ["urgent", "reviewed"]
+```
+
 ---
 
-## Methode Signatures Samenvatting
+## Method Summary
 
-| Methode | Parameters | Return | Beschrijving |
-|---------|------------|--------|--------------|
-| `get(fieldname, default)` | str, any | any | Veilig veld ophalen |
-| `set(fieldname, value)` | str, any | None | Veld waarde zetten |
-| `as_dict(no_nulls, no_default_fields)` | bool, bool | dict | Serialiseren |
-| `get_valid_dict(sanitize, convert_dates)` | bool, bool | dict | Gefilterd serialiseren |
-| `insert(**flags)` | kwargs | self | Nieuw doc opslaan |
-| `save(**flags)` | kwargs | self | Doc updaten |
-| `submit()` | - | self | Submit (0â†’1) |
-| `cancel()` | - | self | Cancel (1â†’2) |
-| `delete()` | - | None | Verwijderen |
-| `reload()` | - | None | Herladen uit DB |
-| `get_doc_before_save()` | - | Document/None | Vorige versie |
-| `run_method(method, *args)` | str, args | any | Method + hooks uitvoeren |
-| `queue_action(action, **kwargs)` | str, kwargs | None | Async uitvoeren |
-| `notify_update()` | - | None | Realtime update |
-| `add_comment(type, text)` | str, str | Comment | Commentaar toevoegen |
-| `append(fieldname, value)` | str, dict | row | Child table rij |
-| `is_new()` | - | bool | Check nieuw doc |
-| `has_permission(permtype)` | str | bool | Permission check |
+| Method | Parameters | Returns | Saves to DB |
+|---|---|---|---|
+| `get(field, default)` | str, any | any | No |
+| `set(field, value)` | str, any | None | No |
+| `as_dict()` | no_nulls, no_default_fields | dict | No |
+| `is_new()` | - | bool | No |
+| `has_value_changed(field)` | str | bool | No |
+| `get_doc_before_save()` | - | Document/None | No |
+| `insert(**flags)` | kwargs | self | Yes |
+| `save(**flags)` | kwargs | self | Yes |
+| `submit()` | - | self | Yes |
+| `cancel()` | - | self | Yes |
+| `delete()` | - | None | Yes |
+| `reload()` | - | None | No |
+| `db_set(field, value)` | str/dict, any | None | Yes |
+| `run_method(method)` | str, args | any | No |
+| `queue_action(action)` | str, kwargs | None | No |
+| `append(field, value)` | str, dict | row | No |
+| `has_permission(perm)` | str | bool | No |
+| `add_comment(type, text)` | str, str | Comment | Yes |
+| `notify_update()` | - | None | No |
