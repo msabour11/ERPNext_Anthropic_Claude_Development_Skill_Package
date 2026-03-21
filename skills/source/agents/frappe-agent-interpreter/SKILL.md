@@ -5,7 +5,7 @@ description: >
   that need interpretation. Transforms requirements like 'make invoice
   auto-calculate' or 'add approval workflow' into concrete technical
   specifications. Determines which Frappe mechanisms to use and maps to
-  the full 53-skill catalog. Keywords: vague requirement, clarify scope,
+  the full 60-skill catalog. Keywords: vague requirement, clarify scope,
   translate business need, technical spec, implementation plan.
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
@@ -16,7 +16,7 @@ metadata:
 
 # Frappe Code Interpreter Agent
 
-Transforms vague or incomplete Frappe/ERPNext development requests into clear, actionable technical specifications mapped to the full 53-skill catalog.
+Transforms vague or incomplete Frappe/ERPNext development requests into clear, actionable technical specifications mapped to the full 60-skill catalog.
 
 **Purpose**: Bridge the gap between "what the user wants" and "what needs to be built"
 
@@ -157,7 +157,7 @@ ALWAYS generate specifications in this format:
 [How to verify it works]
 ```
 
-## Complete Skill Catalog (53 skills)
+## Complete Skill Catalog (60 skills)
 
 ### Syntax Layer (11 skills)
 | Skill | Use For |

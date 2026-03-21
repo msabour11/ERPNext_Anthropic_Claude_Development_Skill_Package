@@ -4,7 +4,7 @@
 
 ## Status
 
-- **Package versie**: v2.0.0 (53 skills, feature-complete)
+- **Package versie**: v3.0.0 (60 skills, feature-complete)
 - **Repo**: `OpenAEC-Foundation/Frappe_Claude_Skill_Package`
 - **CLAUDE.md**: Upgraded naar v2 template (alle protocols P-000a t/m P-010)
 - **CI/CD**: quality.yml workflow toegevoegd
@@ -13,14 +13,14 @@
 
 | Categorie | Aantal | Skills |
 |-----------|:------:|--------|
-| syntax/ | 11 | clientscripts, serverscripts, controllers, hooks, hooks-events, whitelisted, jinja, scheduler, customapp, doctypes, reports |
-| core/ | 7 | database, permissions, api, workflow, notifications, files, cache |
-| impl/ | 13 | clientscripts, serverscripts, controllers, hooks, whitelisted, jinja, scheduler, customapp, reports, workflow, website, ui-components, integrations |
+| syntax/ | 13 | clientscripts, serverscripts, controllers, hooks, hooks-events, whitelisted, jinja, scheduler, customapp, doctypes, reports, **print**, **query-builder** |
+| core/ | 11 | database, permissions, api, workflow, notifications, files, cache, **translation**, **utils**, **logging**, **search** |
+| impl/ | 14 | clientscripts, serverscripts, controllers, hooks, whitelisted, jinja, scheduler, customapp, reports, workflow, website, ui-components, integrations, **workspace** |
 | errors/ | 7 | clientscripts, serverscripts, controllers, hooks, database, permissions, api |
 | ops/ | 8 | bench, deployment, backup, performance, upgrades, cloud, app-lifecycle, frontend-build |
 | agents/ | 5 | interpreter, validator, debugger, migrator, architect |
 | testing/ | 2 | unit, cicd |
-| **Totaal** | **53** | |
+| **Totaal** | **60** | |
 
 ## Skill Naming
 
@@ -38,20 +38,20 @@ Alle skills volgen het patroon `frappe-{laag}-{onderwerp}`:
 | Bestand | Status |
 |---------|--------|
 | CLAUDE.md | Volledig (P-000a t/m P-010) |
-| ROADMAP.md | V2.0 100% compleet |
+| ROADMAP.md | V3.0 100% compleet |
 | WAY_OF_WORK.md | 7-fase methodologie |
 | DECISIONS.md | D-001 t/m D-020 |
 | LESSONS.md | 22 lessen gedocumenteerd |
 | SOURCES.md | Verified Frappe doc URLs |
 | REQUIREMENTS.md | Quality criteria |
 | CHANGELOG.md | Keep a Changelog format |
-| INDEX.md | 53 skills catalogus |
-| README.md | GitHub landing page (v2.0) |
+| INDEX.md | 60 skills catalogus |
+| README.md | GitHub landing page (v3.0) |
 | HANDOFF.md | Dit bestand |
 
-## V3.0 Upgrade — Gepland
+## V3.0 Upgrade — Compleet
 
-V3.0 brengt de dekking van ~85% naar ~95% met 7 nieuwe skills + 12 uitbreidingen.
+V3.0 bracht de dekking van ~85% naar ~95% met 7 nieuwe skills + 12 uitbreidingen. Released 2026-03-21.
 
 **Gap Analysis**: `docs/masterplan/frappe-skill-package-gap-analysis-v3.md`
 
