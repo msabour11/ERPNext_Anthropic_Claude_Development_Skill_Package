@@ -5,6 +5,7 @@ description: >
   Prevents failed migrations from undetected deprecated APIs, removed methods, and changed function signatures.
   Covers breaking change detection v14-v15-v16, deprecated API mapping, migration checklist, common migration errors, automatic fix suggestions.
   Keywords: migration, version upgrade, breaking changes, deprecated API, v14, v15, v16, migrate, compatibility, upgrade ERPNext, version change breaks, after update errors, deprecated method..
+model: sonnet
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:
