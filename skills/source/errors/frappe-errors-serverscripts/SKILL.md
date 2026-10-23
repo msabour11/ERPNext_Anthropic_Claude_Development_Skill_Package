@@ -1,13 +1,6 @@
 ---
 name: frappe-errors-serverscripts
-description: >
-  Use when debugging or preventing errors in Frappe Server Scripts.
-  Prevents ImportError (the #1 error), NameError for restricted builtins,
-  sandbox violations, doc_events not firing, wrong script type selection,
-  SQL injection, permission denied in scheduled scripts, infinite loops,
-  and API scripts not returning JSON. Covers error message mapping table.
-  Keywords: server script error, ImportError, NameError, sandbox,, ImportError in server script, script not running, sandbox error, restricted function.
-  restricted, frappe.throw, doc_events, scheduler, API script, SQL injection.
+description: "Use when Frappe Server Scripts fail: import not allowed (RestrictedPython), sandbox limits, frappe.throw usage, API-type script errors."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

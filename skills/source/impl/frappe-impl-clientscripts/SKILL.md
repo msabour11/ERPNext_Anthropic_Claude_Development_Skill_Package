@@ -1,14 +1,6 @@
 ---
 name: frappe-impl-clientscripts
-description: >
-  Use when implementing client-side form features in Frappe/ERPNext:
-  field visibility, cascading filters, calculated fields, custom buttons,
-  server calls, form validation, child table logic, debugging.
-  Covers step-by-step workflows from Setup > Client Script through
-  migration to custom app JS. Keywords: how to implement client script,
-  form logic workflow, dynamic UI, calculate fields, frm.call, frappe.call,
-  frappe.xcall, client script testing, field dependency, custom button,
-  how to hide field, show field based on value, add button to form, calculate total, dynamic form.
+description: "Use to implement form features in JS: field toggles, filters (set_query), custom buttons, child table logic, fetch/calculate values."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

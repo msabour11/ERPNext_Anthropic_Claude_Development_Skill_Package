@@ -1,12 +1,6 @@
 ---
 name: frappe-syntax-hooks
-description: >
-  Use when configuring Frappe hooks.py for app events, scheduler tasks,
-  document events, fixtures, boot session, jenv customization, or website
-  routing. Covers v14/v15/v16 including extend_doctype_class. Keywords:
-  hooks.py, doc_events, scheduler_events, fixtures, app_include_js,
-  override_whitelisted_methods, extend_doctype_class,
-  hooks.py example, how to register hook, available hooks list, extend_doctype_class example.
+description: "Reference for all hooks.py keys: app events, scheduler, includes (app_include_js/css, doctype_js), overrides, fixtures."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

@@ -1,13 +1,6 @@
 ---
 name: frappe-core-logging
-description: >
-  Use when implementing logging, error tracking, or monitoring in Frappe
-  v14-v16. Covers frappe.logger() for file-based logging,
-  frappe.log_error() for Error Log DocType entries, request logging,
-  Sentry integration, and production logging patterns. Prevents common
-  mistakes with print(), swapped log_error arguments, and sensitive data.
-  Keywords: frappe.logger, log_error, Error Log, logging, Sentry,, where are the logs, how to log errors, error tracking, print not showing, production logs.
-  monitor, request logging, error tracking, debug, production.
+description: "Use for Frappe logging and monitoring: frappe.log_error, Error Log, logger(), log files, monitoring."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

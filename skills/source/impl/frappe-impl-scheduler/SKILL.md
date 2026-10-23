@@ -1,14 +1,6 @@
 ---
 name: frappe-impl-scheduler
-description: >
-  Use when implementing scheduled tasks and background jobs in Frappe
-  v14/v15/v16. Covers hooks.py scheduler_events, frappe.enqueue, queue
-  selection, job deduplication, testing with bench execute/scheduler,
-  monitoring via Scheduled Job Log and RQ Dashboard, error handling,
-  long-running job patterns, email digest, data cleanup, and report
-  generation. Keywords: schedule task, background job, cron job, async
-  processing, queue selection, job deduplication, scheduler implementation,
-  run task automatically, background process, scheduled task not running, async task.
+description: "Use to implement scheduled tasks and background jobs: scheduler_events, frappe.enqueue, queues, long-running jobs."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

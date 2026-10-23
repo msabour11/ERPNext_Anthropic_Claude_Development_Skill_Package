@@ -1,14 +1,6 @@
 ---
 name: frappe-core-translation
-description: >
-  Use when implementing translations/i18n in Frappe v14-v16 apps.
-  Covers _() in Python, __() in JavaScript, CSV translation files,
-  bench commands, string extraction rules, lazy translation _lt(),
-  PO/MO files [v15+], RTL support, and custom app translations.
-  Prevents common mistakes with f-strings, concatenation, and template
-  literals that break string extraction.
-  Keywords: translation, i18n, _(), __(), _lt(), CSV, PO, gettext,, translate my app, multi-language, text not translated, wrong language, how to add translation.
-  bench get-untranslated, RTL, localization.
+description: "Use for Frappe i18n basics: _() and __() usage, translatable strings, language settings, RTL."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

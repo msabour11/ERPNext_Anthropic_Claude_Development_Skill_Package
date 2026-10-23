@@ -1,13 +1,6 @@
 ---
 name: frappe-errors-clientscripts
-description: >
-  Use when debugging or preventing errors in Frappe Client Scripts.
-  Prevents TypeError, frappe.call failures, async/await mistakes,
-  cur_frm vs frm confusion, field not found, child table access errors,
-  timing issues, CSRF token errors, and permission denied on frappe.call.
-  Covers error diagnosis flowchart and debug tools for v14/v15/v16.
-  Keywords: client script error, TypeError, frappe.call, async await,, Cannot read properties of undefined, TypeError, browser console error, script not running, form not updating.
-  cur_frm, field not found, child table, CSRF, permission denied.
+description: "Use when Frappe client scripts / form JS fail: events not firing, frm undefined, async frappe.call issues, refresh loops."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

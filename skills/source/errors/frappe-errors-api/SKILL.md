@@ -1,16 +1,6 @@
 ---
 name: frappe-errors-api
-description: >
-  Use when debugging or handling API errors in Frappe/ERPNext v14/v15/v16.
-  Prevents silent failures and wrong HTTP status codes in REST endpoints.
-  Covers 401 Unauthorized (wrong token format, expired OAuth), 403 Forbidden
-  (missing @whitelist, allow_guest needed), 404 Not Found (wrong endpoint URL),
-  417 Expectation Failed (validation via frappe.throw), 500 Internal Server
-  Error, CORS issues, CSRF token missing/invalid, rate limit exceeded (429),
-  file upload failures, JSON parse errors in request/response, webhook delivery
-  failures, and timeout on long operations.
-  Keywords: API error, 401, 403, 404, 417, 429, 500, CSRF, CORS, REST,, API call fails, 403 forbidden, CORS error, token expired, endpoint not found, webhook not received.
-  whitelist, webhook, rate limit, file upload, authentication token.
+description: "Use when Frappe API calls fail: 403/404/417/500, CSRF token errors, auth failures, whitelisted method not found, CORS."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

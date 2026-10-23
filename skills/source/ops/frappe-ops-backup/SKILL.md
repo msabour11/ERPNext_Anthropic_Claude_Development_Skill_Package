@@ -1,10 +1,6 @@
 ---
 name: frappe-ops-backup
-description: >
-  Use when configuring backups, restoring sites, encrypting backup files, scheduling automated backups, or planning disaster recovery.
-  Prevents data loss from missing backups, failed restores, and unencrypted sensitive data.
-  Covers bench backup, bench restore, backup encryption, S3/remote storage, scheduled backups, disaster recovery procedures.
-  Keywords: backup, restore, encryption, S3, scheduled backup, disaster recovery, bench backup, bench restore, how to backup, restore database, backup failed, data recovery, automated backup..
+description: "Use for Frappe backups/restore: bench backup/restore, encryption, scheduled offsite backups, disaster recovery."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

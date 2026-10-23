@@ -1,13 +1,6 @@
 ---
 name: frappe-impl-serverscripts
-description: >
-  Use when implementing server-side features via Setup > Server Script:
-  document validation, auto-fill, API endpoints, scheduled tasks,
-  permission queries. Covers sandbox-safe coding, script type selection,
-  testing, migration to controllers. Keywords: how to implement server
-  script, which script type, sandbox limitation, Document Event, API
-  script, Scheduler Event, Permission Query, migrate to controller,
-  no-code automation, run code on save, auto-fill field, server-side validation, scheduled script.
+description: "Use to implement Server Scripts (no-code-app): DocType Event, API, Scheduler and Permission Query scripts."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

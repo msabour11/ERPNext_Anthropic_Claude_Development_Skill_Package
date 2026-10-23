@@ -1,10 +1,6 @@
 ---
 name: frappe-impl-integrations
-description: >
-  Use when implementing OAuth providers, Connected Apps, Webhooks, Payment Gateways, or Data Import/Export in Frappe.
-  Prevents authentication failures from wrong OAuth flow, missed webhook deliveries, and data corruption during bulk imports.
-  Covers OAuth2 provider/client, Connected App DocType, Webhook DocType, Payment Gateway integration, Data Import, Data Export, frappe.integrations module.
-  Keywords: OAuth, Connected App, Webhook, Payment Gateway, Data Import, Data Export, integration, API key, OAuth2, webhook trigger, connect to external service, OAuth setup, webhook configuration, import data, export data..
+description: "Use for integrations: OAuth, Connected Apps, Webhooks, payment gateways, Data Import/Export, syncing with external systems."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

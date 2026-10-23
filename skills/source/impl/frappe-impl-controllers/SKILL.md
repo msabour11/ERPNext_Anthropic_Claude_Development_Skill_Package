@@ -1,14 +1,6 @@
 ---
 name: frappe-impl-controllers
-description: >
-  Use when building Document Controllers in a custom Frappe app:
-  file creation, lifecycle hooks, validation, autoname, submittable
-  workflows, controller override, child table controllers, flags system,
-  migration from hooks.py and Server Scripts. Keywords: how to implement
-  controller, which hook to use, validate vs on_update, override controller,
-  submittable document, autoname, flags, extend_doctype_class, controller
-  testing, child table controller,
-  which hook to use, when does validate run, how to override save, document lifecycle.
+description: "Use to implement Document Controllers in a custom app: validate, before_save, on_submit/on_cancel, autoname, linked doc creation."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

@@ -1,13 +1,6 @@
 ---
 name: frappe-agent-interpreter
-description: >
-  Use when receiving vague or unclear ERPNext/Frappe development requests
-  that need interpretation. Transforms requirements like 'make invoice
-  auto-calculate' or 'add approval workflow' into concrete technical
-  specifications. Determines which Frappe mechanisms to use and maps to
-  the full 61-skill catalog. Keywords: vague requirement, clarify scope,
-  translate business need, technical spec, implementation plan,
-  what does this mean, unclear requirement, translate to code, how to build this.
+description: "Use when an ERPNext/Frappe request is vague; turns it into concrete specs (DocTypes, scripts, hooks) before building."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

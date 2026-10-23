@@ -1,16 +1,6 @@
 ---
 name: frappe-errors-permissions
-description: >
-  Use when debugging or handling permission errors in Frappe/ERPNext.
-  Prevents broken document access from throwing in permission hooks.
-  Covers PermissionError (403), has_permission hook failures, User Permission
-  restricting too much or too little, perm_level blocking field access,
-  System Manager bypass not working, Guest access denied, sharing permissions
-  not applying, permission_query_conditions breaking get_list, owner-based
-  permissions confusion, Apply User Permission checkbox behavior, and the
-  permission debug workflow using frappe.permissions.get_doc_permissions.
-  Keywords: PermissionError, has_permission, permission_query_conditions,, permission denied, cannot access, user blocked, sharing not working, role not enough.
-  User Permission, perm_level, sharing, guest access, owner permission.
+description: "Use when Frappe permission errors occur: PermissionError/403, User Permission too strict/loose, perm_level, guest denied, sharing."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

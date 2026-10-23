@@ -1,10 +1,6 @@
 ---
 name: frappe-core-workflow
-description: >
-  Use when creating or modifying Frappe Workflows, defining states and transitions, adding action conditions, or troubleshooting workflow permission errors.
-  Prevents stuck documents from misconfigured transitions, missing state permissions, and circular workflow paths.
-  Covers Workflow DocType, workflow states, transitions, actions, conditions (Python expressions), workflow permissions, workflow_state field, Workflow Action DocType.
-  Keywords: workflow, states, transitions, actions, conditions, workflow_state, Workflow Action, approval, document workflow, approval process, document stuck, cannot change status, workflow not moving, who can approve..
+description: "Use for Frappe Workflow definition: states, transitions, conditions, workflow_state field, workflow permission errors."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

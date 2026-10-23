@@ -1,10 +1,6 @@
 ---
 name: frappe-ops-upgrades
-description: >
-  Use when upgrading Frappe/ERPNext between major versions (v14 to v15, v15 to v16), troubleshooting failed migrations, or planning rollback.
-  Prevents broken upgrades from skipped patches, incompatible customizations, and missing pre-upgrade checks.
-  Covers version upgrade paths, bench update, migrate command, patch troubleshooting, rollback procedures, breaking changes per version.
-  Keywords: upgrade, migration, v14, v15, v16, bench update, bench migrate, rollback, patches, breaking changes, update failed, bench update error, migration error, patches failing, rollback after upgrade..
+description: "Use for upgrading Frappe/ERPNext across major versions (v14->v15->v16): planning, failed migrations, rollback."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

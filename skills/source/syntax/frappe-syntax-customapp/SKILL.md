@@ -1,12 +1,6 @@
 ---
 name: frappe-syntax-customapp
-description: >
-  Use when building Frappe custom apps from scratch. Covers app structure,
-  pyproject.toml configuration, module creation, patches, and fixtures
-  for v14/v15/v16. Prevents common mistakes with app scaffolding and
-  module organization. Keywords: custom app, bench new-app, pyproject.toml,
-  patches, fixtures, modules, app structure,
-  app boilerplate, bench new-app example, module setup, patch example.
+description: "Reference for custom app structure: files, modules.txt, hooks.py, pyproject, patches.txt, fixtures layout."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

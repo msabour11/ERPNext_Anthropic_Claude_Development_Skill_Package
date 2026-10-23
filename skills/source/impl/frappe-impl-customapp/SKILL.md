@@ -1,14 +1,6 @@
 ---
 name: frappe-impl-customapp
-description: >
-  Use when building a custom Frappe app from scratch. Covers bench new-app
-  walkthrough, app structure decisions, adding DocTypes, hooks, patches,
-  fixtures management, development workflow (bench migrate, build,
-  clear-cache), testing, packaging, installing on another site, version
-  management, and app dependencies for v14/v15/v16. Keywords: create custom
-  app, new frappe app, bench new-app, app structure, module creation,
-  doctype creation, fixtures, patches, deployment, packaging,
-  data migration, patch file, patches.txt, migrate data between DocTypes, create new app from scratch.
+description: "Use to build a custom Frappe app end to end: bench new-app, modules, DocTypes, fixtures, patches, install hooks, packaging."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

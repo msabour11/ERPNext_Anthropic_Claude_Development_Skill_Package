@@ -1,14 +1,6 @@
 ---
 name: frappe-impl-hooks
-description: >
-  Use when implementing hooks.py configurations in a Frappe custom app.
-  Covers step-by-step workflows for doc_events, scheduler_events,
-  override/extend_doctype_class, permission hooks, extend_bootinfo,
-  fixtures, asset injection, website hooks, and doctype_js.
-  Prevents broken transactions, missed migrations, and multi-app conflicts.
-  Keywords: hooks.py, doc_events, scheduler_events, override doctype,, how to add hook, when to use doc_events, scheduler setup, override existing behavior.
-  extend doctype class, permission hook, scheduler job, fixtures,
-  doctype_js, extend_bootinfo, website hooks.
+description: "Use to implement hooks.py features: doc_events, override_doctype_class, override_whitelisted_methods, fixtures, boot_session, jenv."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

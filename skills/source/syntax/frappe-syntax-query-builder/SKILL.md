@@ -1,12 +1,6 @@
 ---
 name: frappe-syntax-query-builder
-description: >
-  Use when building database queries with frappe.qb in Frappe v14-v16.
-  Covers the PyPika-based query builder: SELECT, INSERT, UPDATE, DELETE,
-  joins, aggregation, subqueries, cross-DB compatibility (MariaDB/PostgreSQL),
-  and migration from raw SQL. Prevents SQL injection and DB-specific bugs.
-  Keywords: frappe.qb, query builder, DocType, Field, pypika, join,, frappe.qb example, how to write query, join tables, SQL replacement, parameterized query.
-  aggregate, ImportMapper, cross-database, parameterized query.
+description: "Reference for frappe.qb (PyPika): select, joins, where, aggregates, subqueries, functions; replacing raw SQL."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

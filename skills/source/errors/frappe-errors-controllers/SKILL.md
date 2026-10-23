@@ -1,13 +1,6 @@
 ---
 name: frappe-errors-controllers
-description: >
-  Use when debugging or preventing errors in Frappe Document Controllers.
-  Prevents autoname failures, validate loops, on_submit without is_submittable,
-  wrong lifecycle hook choice, get_list permission errors, NestedSet errors,
-  extend_doctype_class conflicts, missing super() calls, and recursion without
-  flags. Covers error diagnosis by lifecycle phase for v14/v15/v16.
-  Keywords: controller error, autoname, validate loop, on_submit, is_submittable,, save fails, validate error, on_submit not working, autoname broken, controller crash.
-  get_list, NestedSet, extend_doctype_class, super, flags, recursion guard.
+description: "Use when Document Controller (Python class) code fails: validate/on_submit errors, recursion, doc.save loops, wrong hook method."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

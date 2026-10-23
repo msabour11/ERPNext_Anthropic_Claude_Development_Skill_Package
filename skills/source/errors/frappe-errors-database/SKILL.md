@@ -1,14 +1,6 @@
 ---
 name: frappe-errors-database
-description: >
-  Use when handling database errors in Frappe/ERPNext. Covers
-  DuplicateEntryError, LinkValidationError, MandatoryError,
-  TimestampMismatchError, CharacterLengthExceededError, InReadOnlyMode,
-  QueryTimeoutError, SQL injection errors, frappe.db.sql parameter format
-  (% vs %s), get_value returning None, transaction deadlocks, MariaDB gone
-  away, too many connections. Error-to-fix mapping for v14/v15/v16.
-  Keywords: database error, DuplicateEntryError, TimestampMismatchError,, MariaDB error, MySQL error, column not found, table missing, duplicate entry, database crash.
-  SQL injection, deadlock, MariaDB gone away, query timeout.
+description: "Use when Frappe DB errors occur: deadlocks, duplicate entry, lock wait timeout, missing column, implicit commits, migrate SQL failures."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

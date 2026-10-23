@@ -1,10 +1,6 @@
 ---
 name: frappe-syntax-doctypes
-description: >
-  Use when creating or modifying DocType JSON definitions, choosing fieldtypes, configuring naming rules, adding child tables, or setting up tree structures.
-  Prevents invalid DocType configurations from wrong fieldtype choices, broken naming rules, and misconfigured child table links.
-  Covers DocType JSON schema, all fieldtypes and their properties, autoname/naming_rule patterns, child table (Table fieldtype), tree DocTypes, virtual DocTypes, Single DocTypes.
-  Keywords: DocType, fieldtype, naming_rule, autoname, child table, tree, virtual DocType, Single, JSON definition, Custom Field, Customize Form, add field without code, hierarchy, tree view, field types list..
+description: "Reference for DocType JSON: fieldtypes, naming rules, child tables, tree doctypes, properties, Custom Fields."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

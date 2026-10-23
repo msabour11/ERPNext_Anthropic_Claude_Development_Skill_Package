@@ -1,13 +1,6 @@
 ---
 name: frappe-core-search
-description: >
-  Use when implementing search functionality in Frappe v14-v16.
-  Covers link field search (search_link), global search, FullTextSearch
-  (Whoosh), SQLiteSearch FTS5 [v15+], Awesomebar customization,
-  search_fields configuration, custom search queries, and website search.
-  Prevents common mistakes with missing search_fields and permission filtering.
-  Keywords: search, search_link, global_search, FullTextSearch, Awesomebar,, search not finding, link field empty, autocomplete not working, global search missing results.
-  search_fields, standard_queries, SQLiteSearch, FTS5, Whoosh.
+description: "Use for Frappe search: global search, link field search (search_fields, query), full-text search, search_link customization."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

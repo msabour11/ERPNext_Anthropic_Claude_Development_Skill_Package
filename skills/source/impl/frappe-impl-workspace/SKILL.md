@@ -1,13 +1,6 @@
 ---
 name: frappe-impl-workspace
-description: >
-  Use when creating or customizing Workspace pages in Frappe v14-v16.
-  Covers Workspace DocType structure, shortcuts, number cards, dashboard
-  charts, custom HTML blocks, JSON content format, shipping workspaces
-  with custom apps, and role-based access control.
-  Prevents common mistakes with content/child-table desync and missing fixtures.
-  Keywords: workspace, desk, dashboard, number card, chart, shortcut,, customize desk, dashboard setup, add shortcut, module page, sidebar customize.
-  workspace builder, module, fixtures, sidebar.
+description: "Use to create or customize Workspaces: shortcuts, cards, charts, number cards, workspace JSON in apps."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

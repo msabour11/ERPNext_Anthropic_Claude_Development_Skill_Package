@@ -1,10 +1,6 @@
 ---
 name: frappe-core-notifications
-description: >
-  Use when implementing email notifications, system alerts, Assignment Rules, Auto Repeat, or ToDo items.
-  Prevents misconfigured Email Accounts, broken notification templates, and silent delivery failures.
-  Covers frappe.sendmail, Notification DocType, Email Account setup, Jinja email templates, Assignment Rules, Auto Repeat scheduling, ToDo API.
-  Keywords: notification, email, sendmail, Email Account, Assignment Rule, Auto Repeat, ToDo, alert, template, notify on approval, email when status changes, alert, email not sending, notification not working..
+description: "Use for Frappe notifications: Notification doctype, email alerts, Assignment Rules, Auto Repeat, ToDo, system notifications."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

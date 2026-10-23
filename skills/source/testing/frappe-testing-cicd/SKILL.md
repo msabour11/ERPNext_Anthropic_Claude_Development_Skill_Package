@@ -1,10 +1,6 @@
 ---
 name: frappe-testing-cicd
-description: >
-  Use when setting up CI/CD pipelines for Frappe apps, configuring GitHub Actions test workflows, or adding linting and security scanning.
-  Prevents broken CI from incorrect test matrix configuration, missing MariaDB/Redis services, and uncaught code quality issues.
-  Covers GitHub Actions workflows, test matrix (Python/Node versions), semgrep rules, pre-commit hooks, linting (ruff, eslint), CI test environment setup.
-  Keywords: CI/CD, GitHub Actions, test matrix, semgrep, pre-commit, linting, ruff, eslint, continuous integration, automated tests, GitHub Actions, CI pipeline, pre-commit, code quality check..
+description: "Use to set up CI/CD for Frappe apps: GitHub Actions test workflows, linting, security scanning."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

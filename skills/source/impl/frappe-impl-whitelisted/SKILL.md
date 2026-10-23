@@ -1,14 +1,6 @@
 ---
 name: frappe-impl-whitelisted
-description: >
-  Use when building API endpoints with @frappe.whitelist() in Frappe.
-  Covers endpoint design, permission patterns, error handling, client
-  integration, file uploads, background jobs, rate limiting, REST API
-  testing, and migration from Server Scripts to whitelisted methods.
-  Prevents permission bypasses, SQL injection, and data exposure.
-  Keywords: how to create API, build REST endpoint, frappe.call,, create API endpoint, call from frontend, custom API, REST endpoint, how to call python from JS.
-  frappe.whitelist, API permission, guest API, secure endpoint,
-  rate limiting, curl testing, frm.call.
+description: "Use to build @frappe.whitelist() endpoints: argument handling, permissions, allow_guest, return shapes, rate limiting."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

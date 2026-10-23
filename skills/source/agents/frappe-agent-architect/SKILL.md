@@ -1,10 +1,6 @@
 ---
 name: frappe-agent-architect
-description: >
-  Use when designing multi-app Frappe architectures, deciding whether to split functionality into separate apps, or implementing cross-app communication patterns.
-  Prevents monolithic app sprawl, circular dependencies between apps, and broken override chains.
-  Covers multi-app architecture decisions, app dependency management, cross-app hooks, override patterns, when to split vs extend, shared DocType strategies.
-  Keywords: architecture, multi-app, app splitting, cross-app, dependencies, override, extend, monolith, modular, how to structure frappe apps, when to split apps, app design, multi-app planning..
+description: "Use when designing multi-app Frappe architecture: splitting into apps, cross-app dependencies, hooks/overrides between apps, data model planning."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

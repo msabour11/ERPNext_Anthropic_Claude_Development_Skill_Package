@@ -1,12 +1,6 @@
 ---
 name: frappe-syntax-whitelisted
-description: >
-  Use when creating Frappe Whitelisted Methods (Python API endpoints) for
-  v14/v15/v16. Covers @frappe.whitelist() decorator, frappe.call/frm.call
-  invocations, permission checks, error handling, response formats, and
-  client-server communication. Keywords: whitelisted, API endpoint,
-  frappe.call, frm.call, REST API, @frappe.whitelist, allow_guest,
-  API endpoint example, frappe.whitelist syntax, how to expose function.
+description: "Reference for @frappe.whitelist syntax: methods, allow_guest, HTTP methods, calling from JS/REST."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

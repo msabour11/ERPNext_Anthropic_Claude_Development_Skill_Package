@@ -1,10 +1,6 @@
 ---
 name: frappe-ops-cloud
-description: >
-  Use when working with Frappe Cloud, Press API, provisioning sites, or managing benches on Frappe Cloud infrastructure.
-  Prevents failed deployments from misconfigured cloud settings and API misuse.
-  Covers Frappe Cloud dashboard, Press API, site provisioning, bench management, environment variables, cloud-specific limitations.
-  Keywords: Frappe Cloud, Press, cloud API, site provisioning, bench management, FC, frappecloud, Frappe Cloud deploy, FC hosting, cloud setup, managed hosting..
+description: "Use when working with Frappe Cloud / Press API: provisioning sites, benches, deploys on Frappe Cloud."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:

@@ -1,13 +1,6 @@
 ---
 name: frappe-syntax-print
-description: >
-  Use when creating print formats or generating PDFs in Frappe v14-v16.
-  Covers Jinja print formats, Print Designer [v15+], Letter Head,
-  PDF generation API (get_pdf, download_pdf), Report print formats
-  ({%= %} syntax), page breaks, and print CSS patterns.
-  Prevents common mistakes with template engine confusion and PDF rendering.
-  Keywords: print format, PDF, get_pdf, Jinja, Letter Head, print designer,, PDF not generating, print format broken, custom PDF, letter head, wkhtmltopdf error.
-  wkhtmltopdf, WeasyPrint, page-break, download_pdf.
+description: "Reference for Print Formats and PDF generation: print designer vs Jinja, get_pdf, page settings, wkhtmltopdf/Chrome."
 license: MIT
 compatibility: "Claude Code, Claude.ai Projects, Claude API. Frappe v14-v16."
 metadata:
